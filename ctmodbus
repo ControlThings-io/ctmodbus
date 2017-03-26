@@ -104,8 +104,8 @@ def connect(target):
     #client = ModbusClient(method='rtu', port='/dev/ttyACM0', timeout=1)
     #client.connect()
     if target.find(':') > 0:
-        target = target.lower().split(':')
-        proto = target[0]
+        target = target.split(':')
+        proto = target[0].lower()
         ip_dev = target[1]
         if len(target) == 3:
             port = target[2]
