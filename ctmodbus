@@ -33,8 +33,11 @@ import sys
 import logging
 from binascii import *
 from pymodbus.client.sync import *
-import better_exceptions
-
+import importlib
+try:
+    import better_exceptions
+except ImportError as err:
+    print('Error:', err)
 
 sys.dont_write_bytecode = True
 req_version = (3,5)
