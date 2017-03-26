@@ -37,7 +37,7 @@ import importlib
 try:
     import better_exceptions
 except ImportError as err:
-    print('Error:', err)
+    pass
 
 sys.dont_write_bytecode = True
 req_version = (3,5)
