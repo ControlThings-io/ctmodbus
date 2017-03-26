@@ -92,7 +92,7 @@ def read(client, args):
     return resultsd
 
 
-def connect(target, port=502):
+def connect(target):
     """Initiate connection to endpoint
     @return: returns the correct connection object
     """
@@ -102,19 +102,20 @@ def connect(target, port=502):
     #client.connect()
     if target.find(':') > 0:
         target = target.lower().split(':')
-    if target[0] == 'tcp':
+        proto = target[0]
+        ip_dev = target[1]
         if len(target) == 3:
             port = target[2]
-        client = ModbusTcpClient(target[1], port)
-    elif target[0] == 'udp':
-        if len(target) == 3:
-            port = target[2]
-        client = ModbusUdpClient(target[1], port)
-    elif target[0] == 'rtu':
-        print(type(target[0]))
-        client = ModbusSerialClient(method=target[0], port=target[1], timeout=1)
-    elif target[0] == 'ascii':
-        client = ModbusSerialClient(method=target[0], port=target[1], timeout=1)
+        else:
+            port=502
+    if proto == 'tcp':
+        client = ModbusTcpClient(ip_dev, port)
+    elif proto == 'udp':
+        client = ModbusUdpClient(ip_dev, port)
+    elif proto == 'rtu':
+        client = ModbusSerialClient(method=proto, port=ip_dev, timeout=1)
+    elif proto == 'ascii':
+        client = ModbusSerialClient(method=proto, port=ip_dev, timeout=1)
     else:
         print('Protocol must be TCP, UDP, RTU, or ASCII')
         sys.exit()
