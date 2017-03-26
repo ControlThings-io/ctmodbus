@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""ControlThings Modbus, aka ctmodbus
+
+Usage:
+  ctmodbus [options] TARGET read IOH TYPE ADDRESS [COUNT]
+  ctmodbus [options] TARGET write IOH TYPE ADDRESS DATA
+  ctmodbus [options] TARGET FUNCTION FUNC_DATA
+  ctmodbus (-h | --help)
+
+Arguments:
+  TARGET        IP or serial device in form (PROTO:IP-or-DevID:OptPORT) such as:
+                    ascii:/dev/serial
+                    rtu:/dev/serial
+                    tcp:10.10.10.1 or tcp:127.0.0.1:10502
+                    udp:10.10.10.1 or udp:127.0.0.1:10502
+  read | write  Automatically choose Modbus read/write function based on data
+  IOH           Must be "input", "output", or "holding"
+  TYPE          Must be "bit", "coil", "byte", "register"
+  ADDRESS       Modbus reference address (0-65535)
+  COUNT         Number of Modbus addresses to read
+  FUNCTION      Modbus fucntion code (0-127) representing
+  FUNC_DATA     Data passed to fucntion code
+
+Options:
+  -v            Enable verbose output
+  -d            Enable debug outpu
+  -h --help     Show this screen.
+  --version     Show version.
+
+"""
+from docopt import docopt
+import sys
+import logging
+from binascii import *
+from pymodbus.client.sync import *
+import better_exceptions
+
+
+sys.dont_write_bytecode = True
+req_version = (3,5)
+cur_version = sys.version_info
+if cur_version <= req_version:
+   import __future__
+
+
+def read(client, args):
+    """Reads data from endpoint
+    @param client: Handler for modbus connection
+    @param args: Arguments pass via the commandline
+    @return: List of address and read result pairs
+    """
+    add = int(args['ADDRESS'])
+    num = int(args['COUNT'])
+    ioh = str(args['IOH']).lower()
+    typ = str(args['TYPE']).lower()
+    resultsd = {}
+    if any(s.startswith(typ) for s in ['bits', 'coils', 'inputs']):
+        if any(s.startswith(ioh) for s in ['input', 'descrete']):
+            for i in range(0, num, 1000):
+                results = client.read_discrete_inputs(add+i, min(1000, num-i), unit=1).bits
+                for address, result in zip(range(add+i, add + i + min(1000, num-i)), results):
+                    resultsd[address] = result
+        elif any(s.startswith(ioh) for s in ['output', 'holding']):
+            for i in range(0, num, 1000):
+                results = client.read_coils(add+i, min(1000, num-i), unit=1).bits
+                for address, result in zip(range(add+i, add + i + min(1000, num-i)), results):
+                    resultsd[address] = result
+        else:
+            print('Did you mean input coils/bits or output coils/bits?')
+            sys.exit()
+    elif any(s.startswith(typ) for s in ['words', 'registers']):
+        if any(s.startswith(ioh) for s in ['input']):
+            for i in range(0, num, 100):
+                results = client.read_input_registers(add+i, min(100, num-i), unit=1).registers
+                for address, result in zip(range(add+i, add + i + min(100, num-i)), results):
+                    resultsd[address] = result
+        elif any(s.startswith(ioh) for s in ['output', 'holding']):
+            for i in range(0, num, 100):
+                results = client.read_holding_registers(add+i, min(100, num-i), unit=1).registers
+                for address, result in zip(range(add+i, add + i + min(100, num-i)), results):
+                    resultsd[address] = result
+        else:
+            print('Did you mean input words/registers or output/holding words/registers?')
+            sys.exit()
+    else:
+        print('Connected, but I dont understand what you want me to read')
+        print('Try something like "read holding register 0"')
+        sys.exit()
+    #print(results.__dict__)
+    # for address, result in zip(range(add, add+num), results):
+    #     resultsd[address] = [result.to_bytes(2, 'big')]
+    return resultsd
+
+
+def connect(target, port=502):
+    """Initiate connection to endpoint
+    @return: returns the correct connection object
+    """
+    #client = ModbusClient('localhost', port=502)
+    #client = ModbusClient(method='ascii', port='/dev/pts/2', timeout=1)
+    #client = ModbusClient(method='rtu', port='/dev/ttyACM0', timeout=1)
+    #client.connect()
+    if target.find(':') > 0:
+        target = target.lower().split(':')
+    if target[0] == 'tcp':
+        if len(target) == 3:
+            port = target[2]
+        client = ModbusTcpClient(target[1], port)
+    elif target[0] == 'udp':
+        if len(target) == 3:
+            port = target[2]
+        client = ModbusUdpClient(target[1], port)
+    elif target[0] == 'rtu':
+        print(type(target[0]))
+        client = ModbusSerialClient(method=target[0], port=target[1], timeout=1)
+    elif target[0] == 'ascii':
+        client = ModbusSerialClient(method=target[0], port=target[1], timeout=1)
+    else:
+        print('Protocol must be TCP, UDP, RTU, or ASCII')
+        sys.exit()
+    return client
+
+
+if __name__ == '__main__':
+    args = docopt(__doc__, version='ctmodbus 0.1')
+    if args['-d']:
+        print(args)
+    logging.basicConfig()
+    log = logging.getLogger()
+    #log.setLevel(logging.DEBUG)
+
+    client = connect(args['TARGET'])
+
+    if args['COUNT'] == None:
+        args['COUNT'] = 1
+    if args['read']:
+        results = read(client, args)
+    else:
+        print('those commands are not implimented yet')
+
+    client.close()
+
+    if args['-d']:
+        print(type(results), results)
+    for address, result in results.items():
+        print('{0:12} = {1:<6} {2:>6} {3:6}'.format(address, result, hex(result), chr(result)))
