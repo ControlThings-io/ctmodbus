@@ -194,14 +194,14 @@ def write(client, addr, typ, data):
             else:
                 print('Hex value {} not between 0x00 and 0xFFFF'.format(item))
                 return False
-        # elif item[:2].lower() == '0b':
-        #     #print('Found Binary')
-        #     int_item = ???
-        #     if 0 <= int_item <= 65535:
-        #         int_words.append(int_item)
-        #     else:
-        #         print('Binary value {} not between 0b00000000 (eight 0s) and 0b1111111111111111 (sixteen 1s)'.format(item))
-        #         return False
+        elif item[:2].lower() == '0b':
+            #print('Found Binary')
+            int_item = int(item[2:], 2)
+            if 0 <= int_item <= 65535:
+                int_words.append(int_item)
+            else:
+                print('Binary value {} not between 0b0 and 0b1111111111111111 (sixteen 1s)'.format(item))
+                return False
         else:
             for char in item:
                 #print('Looks like a string')
