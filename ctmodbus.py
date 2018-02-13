@@ -183,20 +183,29 @@ def write(client, addr, typ, data):
     #    print(addr, typ, data)
     int_words = []
     for item in data:
-        #print("Evaluating: {}".format(item))
+        #print("Evaluating: {}".format(item[:2]))
         if item.isdigit():
             int_words.append(int(item))
-        elif item[:2].lower() == '0x':
-            for i in range(2, len(item), 4):
-                int_words.append(int(item[i:i+4]))
-        elif item[:2].lower() == '0b':
-            for i in range(2, len(item), 16):
-                int_words.append(int(item[i:i+16]))
+        elif item[:2].lower() == '0x' and (len(item) == 2 or len(item) == 4):
+            #print('Found Hex')
+            int_item = int.from_bytes(bytes.fromhex(item[2:]),'big')
+            if 0 <= int_item <= 65535:
+                int_words.append(int_item)
+            else:
+                print('Hex value {} not between 0x00 and 0xFFFF'.format(item))
+                return False
+        # elif item[:2].lower() == '0b':
+        #     #print('Found Binary')
+        #     int_item = ???
+        #     if 0 <= int_item <= 65535:
+        #         int_words.append(int_item)
+        #     else:
+        #         print('Binary value {} not between 0b00000000 (eight 0s) and 0b1111111111111111 (sixteen 1s)'.format(item))
+        #         return False
         else:
             for char in item:
-                #print('Looks like a char')
+                #print('Looks like a string')
                 int_words.append(ord(char))
-                #print(char)
     if any(s.startswith(typ) for s in ['bits', 'coils', 'inputs']):
         for bit in bin(data):
             print(bit)
