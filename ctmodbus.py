@@ -203,12 +203,13 @@ def write(client, addr, typ, data):
             #client.write_coils(addr, True, unit=0x01)
         return 'Success'
     elif any(s.startswith(typ) for s in ['words', 'registers']):
-        print(int_words)
-        print('Writing starting register {}: {}'.format(addr, int_words))
+        print('Start writing at register {}: {}'.format(addr, int_words))
         client.write_registers(addr, int_words, unit=0x01)
+        print('Confirming write success with a read')
+        read(client=client, ioh='output', typ=typ, addr=addr, num=len(int_words))
     else:
         print('Write coils/bits or registers/words?')
-    return
+    return True
 
 
 #def simulate(args):
@@ -221,14 +222,11 @@ def no_prompt(client, args):
     data = args['DATA']
     num = int(args['COUNT'])
     if args['read']:
-        results = read(client=client, addr=addr, ioh=ioh, typ=typ, num=num)
+        read(client=client, addr=addr, ioh=ioh, typ=typ, num=num)
     elif args['write']:
-        results = write(client=client, addr=addr, typ=typ, data=data)
-    elif args['simulate']:
-        results = write(args)
+        write(client=client, addr=addr, typ=typ, data=data)
     else:
         print('those commands are not implimented yet')
-
     client.close()
 
 
@@ -246,18 +244,21 @@ def modbus_prompt(client, args):
                num = 1
            else:
                num = int(command[4])
-           results = read(client=client, addr=addr, ioh=ioh, typ=typ, num=num)
+           read(client=client, addr=addr, ioh=ioh, typ=typ, num=num)
        elif command[0] == 'write' and len(command) >= 4:
            typ = str(command[1]).lower()
            addr = int(command[2])
            data = [x for x in command[3:]]
-           results = write(client=client, addr=addr, typ=typ, data=data)
+           write(client=client, addr=addr, typ=typ, data=data)
        elif command[0] == 'exit':
            break
        else:
            print('Supported commands are:')
            print('read IOH TYPE ADDRESS [COUNT]')
            print('write TYPE ADDRESS WORD...')
+   client.close()
+   print('Goodbye\n')
+
 
 
 def main():
