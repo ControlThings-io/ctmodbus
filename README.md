@@ -1,7 +1,8 @@
-Control Things Modbus
-=====================
+#Control Things Modbus
 
-This is a commandline tool for interacting with the Modbus protocol.  Once completed, features will include support for:
+The goal of ctmodbus is to become the security professional's Swiss army knife
+for interacting with Modbus devices.  Once completed, features will include
+support for:
 
  - RTU and ASCII versions of serial Modbus  (DONE in lib)
  - TCP and UDP versions of TCP/IP Modbus  (DONE in lib)
@@ -61,7 +62,7 @@ And includes asyncio additions by:
 
 
 
-Copyright 2017 Justin Searle
+Copyright 2017-2018 Justin Searle
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
