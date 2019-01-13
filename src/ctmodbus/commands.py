@@ -254,7 +254,7 @@ class Commands(object):
                             return False
                         addr2 += 1
                         count = addr2 - addr1
-                        step = 1000
+                        step = 10
                         for i in range(0, count, step):
                             response = event.app.session.read_discrete_inputs(addr1+i, min(step, count-i), unit=1)
                             for address, result in zip(range(addr1+i, addr1+i+min(step, count-i)), response.bits):
@@ -313,7 +313,7 @@ class Commands(object):
                             return False
                         addr2 += 1
                         count = addr2 - addr1
-                        step = 1000
+                        step = 10
                         for i in range(0, count, step):
                             response = event.app.session.read_coils(addr1+i, min(step, count-i), unit=1)
                             for address, result in zip(range(addr1+i, addr1+i+min(step, count-i)), response.bits):
@@ -372,7 +372,7 @@ class Commands(object):
                             return False
                         addr2 += 1
                         count = addr2 - addr1
-                        step = 100
+                        step = 10
                         for i in range(0, count, step):
                             response = event.app.session.read_input_registers(addr1+i, min(step, count-i), unit=1)
                             for address, result in zip(range(addr1+i, addr1+i+min(step, count-i)), response.registers):
@@ -431,7 +431,7 @@ class Commands(object):
                             return False
                         addr2 += 1
                         count = addr2 - addr1
-                        step = 100
+                        step = 10
                         for i in range(0, count, step):
                             response = event.app.session.read_holding_registers(addr1+i, min(step, count-i), unit=1)
                             for address, result in zip(range(addr1+i, addr1+i+min(step, count-i)), response.registers):
