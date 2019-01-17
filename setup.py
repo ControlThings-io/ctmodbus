@@ -22,7 +22,7 @@ def read(*names, **kwargs):
 
 setup(
     name='ctmodbus',
-    version='0.2',
+    version='0.4',
     license='GPLv3',
     description='a security professional\'s swiss army knife for interacting with Modbus devices',
     long_description=open('README.md').read(),
@@ -58,6 +58,7 @@ setup(
     ],
     install_requires=[
         'prompt_toolkit>=2.0.1',
+        'pyserial',
         'pymodbus',
         'tabulate'
     ],
@@ -68,7 +69,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'ctmodbus = ctmodbus.cli:main',
+            'ctmodbus = ctmodbus.commands:main',
         ]
     },
 )

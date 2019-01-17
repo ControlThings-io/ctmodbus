@@ -4,17 +4,26 @@ The goal of ctmodbus is to become the security professional's Swiss army knife
 for interacting with Modbus devices.  Once completed, features will include
 support for:
 
-- RTU and ASCII versions of serial Modbus  (DONE in lib)
-- TCP and UDP versions of TCP/IP Modbus  (DONE in lib)
-- Client and server options  (DONE in lib)
-- All standard Modbus functions  (Reads DONE, writes IN PROGRESS)
+- RTU and ASCII versions of serial Modbus  (DONE)
+- TCP and UDP versions of TCP/IP Modbus  (DONE)
+- Client and server options  (DONE in lib, server IN PROGRESS)
+- All standard Modbus functions  (reads DONE, writes IN PROGRESS)
 - Arbitrary custom Modbus functions
-- Reading addresses specified in lists and ranges
+- Reading addresses specified in lists and ranges (DONE)
 - Interval based polling
-- Sync files with complex interval polls
-- Clone feature to quickly create base data for server
+- Clone feature to quickly create base data for simulator
 - Proxy feature between two modbus endpoints
 - Export to cthistorian and database
+
+# Installation:
+
+As long as you have git and Python 3.5 or later installed, all you should need to do is:
+
+```
+git clone https://github.com/ControlThingsTools/ctmodbus.git
+cd ctmodbus
+pip3 install -r requirements.txt
+```
 
 ## Examples of current user interface commands once you start ctmodbus:
 
@@ -57,6 +66,7 @@ support for:
 > tunnel connect tcp:10.1.1.1:6666                # connect from another comp
 > tunnel send exfiltration.txt                    # send files through tunnel
 > tunnel terminal                                 # or open a terminal session
+> historian tcp:10.1.1.1:9300                     # transactions to cthistorian
 ```
 
 ## This tool uses the excellent pymodbus library:
