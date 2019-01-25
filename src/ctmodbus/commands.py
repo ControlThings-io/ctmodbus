@@ -125,9 +125,12 @@ class CtModbus(Ctui):
         output_text = '{} {} - {}'.format(date, time, desc)
         i = 0
         for address in range(start, stop):
+            # Finish line after 32 bits of output
             if i % 32 == 0: output_text += '\n{:>5}:  '.format(address)
             i += 1
+            # Print next bit
             output_text += str(results[address])
+            # Print spaces ever 4 bits
             if i % 4 == 0: output_text += ' '
         # TODO: Add to self.storage
         output_text += '\n'
@@ -140,8 +143,10 @@ class CtModbus(Ctui):
         output_text = '{} {} - {}'.format(date, time, desc)
         i = 0
         for address in range(start, stop):
+            # Finish line after 8 words of output
             if i % 8 == 0: output_text += '\n{:>5}:  '.format(address)
             i += 1
+            # Print next word
             output_text += '{:04x}'.format(results[address]) + ' '
         # TODO: Add to self.storage
         output_text += '\n'
@@ -246,6 +251,55 @@ class CtModbus(Ctui):
         csr = args.split()[0]
         message = '{}: {}\n\n'.format(desc, csr)
         self.response_message_dialog(message, results)
+        return output_text
+
+
+    def do_write_registers(self, args, output_text):
+        """Write to registers in format: <address> <int>..."""
+        start, values = args.split(maxsplit=1)
+        assert (start.isdigit()), 'start must be an integer'
+        int_start = int(start)
+        try:
+            list_int_values = [int(x) for x in values.split()]
+        except:
+            raise AssertionError('List of values to write must be decimals')
+        if len(list_int_values) == 1:
+            self.session.write_register(int_start, list_int_values[0], unit=self.unit_id)
+            desc = 'Modbus Function 5, Write Single Register'
+        else:
+            self.session.write_registers(int_start, list_int_values, unit=self.unit_id)
+            desc = 'Modbus Function 5, Write Multiple Registers'
+        message_dialog(title='Success', text=f'Wrote {list_int_values} starting at {int_start}')
+        results = {}
+        stop = int_start + len(list_int_values)
+        for i in range(len(list_int_values)):
+            results[int_start + i] = list_int_values[i]
+        output_text += self.log_and_output_words(desc, int_start, stop, results)
+        return output_text
+
+
+    def do_write_coils(self, args, output_text):
+        """Write to registers in format: <address> <int>..."""
+        desc = 'Modbus Function 3, Read Holding Registers'
+        start, values = args.split(maxsplit=1)
+        assert (start.isdigit()), 'start must be an integer'
+        int_start = int(start)
+        try:
+            list_bool_values = [bool(int(x)) for x in values.replace(' ', '')]
+        except:
+            raise AssertionError('List of values to write must be decimals')
+        if len(list_bool_values) == 1:
+            self.session.write_coil(int_start, list_bool_values[0], unit=self.unit_id)
+            desc = 'Modbus Function 5, Write Single Coil'
+        else:
+            self.session.write_coils(int_start, list_bool_values, unit=self.unit_id)
+            desc = 'Modbus Function 15, Write Multiple Coils'
+        message_dialog(title='Success', text=f'Wrote {list_bool_values} starting at {int_start}')
+        results = {}
+        stop = int_start + len(list_bool_values)
+        for i in range(len(list_bool_values)):
+            results[int_start + i] = int(list_bool_values[i])
+        output_text += self.log_and_output_bits(desc, int_start, stop, results)
         return output_text
 
 

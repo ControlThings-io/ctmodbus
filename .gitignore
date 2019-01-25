@@ -1,4 +1,5 @@
 .DS_Store
+.mypy_cache/
 *.pyc
 __pycache__/
 src/ctserial/__pycache__/
