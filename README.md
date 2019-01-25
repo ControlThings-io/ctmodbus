@@ -76,8 +76,7 @@ pip3 install -r requirements.txt
 - [PyModbus](https://github.com/bashwork/pymodbus)
 
 
-
-Copyright 2017-2018 Justin Searle
+## Copyright 2019 Justin Searle
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
