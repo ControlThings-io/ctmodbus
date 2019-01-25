@@ -28,15 +28,15 @@ pip3 install -r requirements.txt
 ## Examples of current user interface commands once you start ctmodbus:
 
 ```
-> connect tcp:10.10.10.1                # start a client session
-> connect rtu:/dev/serial               # works with serial too
-> connect ascii:com2                    # and and windows
-> connect udp:10.10.10.1:10502          # even udp with custom ports
-> read id                               # read device identifiers
-> read discrete_inputs 1                # read coils and registers
-> read coils 1,3,5,7                    # with comma separated values
-> read input_register 5,10-30,90-99     # and ranges
-> read holding_register 50 9            # or start address and count
+> connect tcp:10.10.10.1                          # start a client session
+> connect rtu:/dev/serial                         # works with serial too
+> connect ascii:com2                              # and and windows
+> connect udp:10.10.10.1:10502                    # even udp with custom ports
+> read id                                         # read device identifiers
+> read discrete_inputs 1                          # read coils and registers
+> read coils 1,3,5,7                              # with comma separated values
+> read input_register 5,10-30,90-99               # and ranges
+> read holding_register 50 9                      # or start address and count
 > write coils 128 0                               # write single values
 > write coils 76 01101001                         # or multiple values
 > write holding_register 1000 "My name is Mud"    # registers support strings
