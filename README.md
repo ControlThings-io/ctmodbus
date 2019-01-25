@@ -39,13 +39,14 @@ pip3 install -r requirements.txt
 > read holding_register 50 9                      # or start address and count
 > write coils 128 0                               # write single values
 > write coils 76 01101001                         # or multiple values
-> write holding_register 1000 "My name is Mud"    # registers support strings
-> write holding_register 1400 DEADBEEF            # or raw hex
+> write holding_register 1000 14302 188 305       # registers support int
 ```
 
 ## Planned ui commands once complete:
 
 ```
+> write holding_register 1000 "My name is Mud"    # and strings
+> write holding_register 1400 DEADBEEF            # or raw hex
 > poll holding_register 1-10,15-19 1              # poll registers every second
 > tags add input1 input_register 1                # define tag names
 > tags add config2 holding_register 50-69         # tags can define ranges
