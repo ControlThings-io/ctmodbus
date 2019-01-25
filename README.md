@@ -17,7 +17,7 @@ support for:
 
 # Installation:
 
-As long as you have git and Python 3.5 or later installed, all you should need to do is:
+As long as you have git and Python 3.6 or later installed, all you should need to do is:
 
 ```
 git clone https://github.com/ControlThingsTools/ctmodbus.git
