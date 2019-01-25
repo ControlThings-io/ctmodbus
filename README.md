@@ -70,9 +70,10 @@ pip3 install -r requirements.txt
 > historian tcp:10.1.1.1:9300                     # transactions to cthistorian
 ```
 
-## This tool uses the excellent pymodbus library:
+## This tool is built upon these to key library:
 
-- https://github.com/bashwork/pymodbus
+- [Control Things User Interface](https://github.com/ControlThingsTools/ctui)
+- [PyModbus](https://github.com/bashwork/pymodbus)
 
 
 
