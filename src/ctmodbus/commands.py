@@ -28,7 +28,7 @@ import re
 class CtModbus(Ctui):
     """Commands that users may use at the application prompt."""
     name = 'ctmodbus'
-    version = '0.4'
+    version = '0.5'
     description = 'a security professional\'s swiss army knife for interacting with Modbus devices'
     prompt = 'ctmodbus> '
     session = None
