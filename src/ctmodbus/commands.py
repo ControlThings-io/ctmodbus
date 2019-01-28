@@ -18,7 +18,6 @@ from ctui.dialogs import message_dialog
 from pymodbus.client.sync import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
 from pymodbus.pdu import ModbusExceptions, ExceptionResponse, IllegalFunctionRequest
 from pymodbus.mei_message import *     #ReadDeviceInformationRequest
-from prompt_toolkit.document import Document
 from tabulate import tabulate
 from datetime import datetime
 import serial.tools.list_ports
