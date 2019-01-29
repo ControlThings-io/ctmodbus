@@ -255,6 +255,7 @@ class CtModbus(Ctui):
 
     def do_write_registers(self, args, output_text):
         """Write to registers in format: <address> <int>..."""
+        assert (self.session), 'There is not an open session.  Connect to one first'  # ToDo assert session type
         start, values = args.split(maxsplit=1)
         assert (start.isdigit()), 'start must be an integer'
         int_start = int(start)
@@ -279,6 +280,7 @@ class CtModbus(Ctui):
 
     def do_write_coils(self, args, output_text):
         """Write to registers in format: <address> <int>..."""
+        assert (self.session), 'There is not an open session.  Connect to one first'  # ToDo assert session type
         desc = 'Modbus Function 3, Read Holding Registers'
         start, values = args.split(maxsplit=1)
         assert (start.isdigit()), 'start must be an integer'
