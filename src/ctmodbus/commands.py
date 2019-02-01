@@ -114,8 +114,8 @@ class CtModbus(Ctui):
         assert (self.session), 'There is not an open session.  Connect to one first'  # ToDo assert session type
         request = ReadDeviceInformationRequest(unit=1)
         response = self.session.execute(request)
-        output_text += str(response) + '\n'
-        return output_text
+        message_dialog(title="Response", text = str(reponse))
+        return None
 
 
     def log_and_output_bits(self, desc, start, stop, results):
@@ -179,7 +179,9 @@ class CtModbus(Ctui):
 
 
     def read_common(self, args):
-        assert (self.session), 'There is not an open session.  Connect to one first'  # TODO assert session type
+        assert (self.session), 'There is not an open session.  Connect to one first'
+        # TODO assert session type
+        assert (len(args) > 0), 'No address specified'
         parts = args.split(maxsplit=1)
         csr = parts[0]
 

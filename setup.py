@@ -57,7 +57,6 @@ setup(
         'Modbus', 'pentest', 'ControlThingsTools', 'ControlThingsPlatform',
     ],
     install_requires=[
-        'prompt_toolkit>=2.0.1',
         'pyserial',
         'pymodbus',
         'tabulate'
