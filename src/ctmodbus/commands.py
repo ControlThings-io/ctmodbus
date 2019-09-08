@@ -114,7 +114,7 @@ class CtModbus(Ctui):
         assert (self.session), 'There is not an open session.  Connect to one first'  # ToDo assert session type
         request = ReadDeviceInformationRequest(unit=1)
         response = self.session.execute(request)
-        message_dialog(title="Response", text = str(reponse))
+        message_dialog(title="Response", text = str(response))
         return None
 
 
