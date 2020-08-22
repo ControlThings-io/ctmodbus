@@ -20,9 +20,7 @@ support for:
 As long as you have git and Python 3.6 or later installed, all you should need to do is:
 
 ```
-git clone https://github.com/ControlThingsTools/ctmodbus.git
-cd ctmodbus
-pip3 install -r requirements.txt
+pip3 install ctmodbus
 ```
 
 ## Examples of current user interface commands once you start ctmodbus:
@@ -76,7 +74,7 @@ pip3 install -r requirements.txt
 - [PyModbus](https://github.com/bashwork/pymodbus)
 
 
-## Copyright 2019 Justin Searle
+## Copyright 2020 Justin Searle
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 

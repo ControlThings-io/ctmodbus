@@ -22,10 +22,11 @@ def read(*names, **kwargs):
 
 setup(
     name='ctmodbus',
-    version='0.5',
+    version='0.5.1',
     license='GPLv3',
     description='a security professional\'s swiss army knife for interacting with Modbus devices',
     long_description=open('README.md').read(),
+    long_description_content_type="text/markdown",
     author='Justin Searle',
     author_email='justin@meeas.com',
     url='https://github.com/ControlThingsTools/ctmodbus',
@@ -46,20 +47,18 @@ setup(
         'Operating System :: Unix',
         'Operating System :: POSIX',
         'Operating System :: Microsoft :: Windows',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: PyPy',
+        'Programming Language :: Python :: 3',
         'Topic :: Utilities',
     ],
     keywords=[
         'Modbus', 'pentest', 'ControlThingsTools', 'ControlThingsPlatform',
     ],
+    python_requires='>=3.6',
     install_requires=[
         'pyserial',
         'pymodbus',
-        'tabulate'
+        'tabulate',
+        'ctui'
     ],
     extras_require={
         # eg:

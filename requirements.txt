@@ -1,2 +1,0 @@
--e git+git://github.com/ControlThingsTools/ctui.git@master#egg=ctui
--e .
