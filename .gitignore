@@ -5,3 +5,5 @@ __pycache__/
 src/ctserial/__pycache__/
 dist/
 ctmodbus.egg-info/
+.venv/
+build/
