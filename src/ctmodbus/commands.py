@@ -18,8 +18,6 @@ from ctui.dialogs import message_dialog
 from ctui.types import GreedyInt, GreedyBin
 from pymodbus.client.sync import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
 from pymodbus.mei_message import ReadDeviceInformationRequest
-from tabulate import tabulate
-from datetime import datetime
 
 
 ctmodbus = Ctui()
@@ -299,4 +297,8 @@ def do_write_coils(address:int, values:GreedyBin):
     return output_text
 
 
-ctmodbus.run()
+def main():
+    ctmodbus.run()
+    
+if __name__ == '__main__':
+    main()
