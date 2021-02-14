@@ -47,7 +47,14 @@ def do_debug(cmd:str):
 
 @ctmodbus.command
 def do_connect():
-    """Connect to modbus device..."""
+    """Connect to modbus device/service or list suggestions"""
+    output_text = 'Connected Serial Devices\n'
+    output_text += common.list_serial_devices()
+    output_text += '\n\n\n'
+    output_text += 'Listening Services on Localhost\n'
+    output_text += common.list_listening_ports()
+    output_text += '                                                            \n'
+    message_dialog(title='Suggestions', text = output_text)
 
 
 @ctmodbus.command

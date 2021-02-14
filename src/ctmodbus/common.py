@@ -13,9 +13,11 @@ Control Things Modbus, aka ctmodbus.py
 # details at <http://www.gnu.org/licenses/>.
 """
 
-import serial.tools.list_ports
-from tabulate import tabulate
+import operator
 from datetime import datetime
+from serial.tools.list_ports import comports
+from psutil import net_connections, Process
+from tabulate import tabulate
 from ctui.dialogs import message_dialog
 
 
@@ -109,10 +111,42 @@ def validate_serial_device(device):
 
     :PARAM: 
     """
-    devices = [x.device for x in serial.tools.list_ports.comports()]
+    devices = [x.device for x in comports()]
     devices_pretty = '\n'.join([x for x in devices])
     assert (device in devices), '{} is not in: \n{}'.format(device, devices_pretty)
     return device
+
+
+def list_serial_devices():
+    headers = ['DEVICE', 'MANUFACTURER', 'PRODUCT ID']
+    rows = []
+    for dev in comports(): 
+        columns = []
+        columns.append(dev.device)
+        columns.append(dev.manufacturer)
+        columns.append(dev.product)
+        rows.append(columns)
+    table = sorted(rows, key=operator.itemgetter(0))
+    return tabulate(table, headers=headers, tablefmt='fancy_grid')
+
+
+def list_listening_ports():
+    conns = net_connections()
+    headers = ['IP', 'PORT', 'PROCESS']
+    rows = []
+    for conn in conns:
+        if (conn[5] == 'LISTEN'):
+            collumns = []
+            collumns.append(conn[3][0])
+            collumns.append(conn[3][1])
+            if conn[6]:
+                process = Process(conn[6])
+                collumns.append(process.name())
+            else:
+                collumns.append('')
+            rows.append(collumns)
+    table = sorted(rows, key=operator.itemgetter(1))
+    return tabulate(table, headers=headers, tablefmt='fancy_grid')
 
 
 def parse_ip_port(ip_port):

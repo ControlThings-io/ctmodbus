@@ -58,7 +58,8 @@ setup(
         'ctui==0.7.*',
         'pyserial',
         'pymodbus',
-        'tabulate'
+        'tabulate',
+        'psutil'
     ],
     extras_require={
         # eg:
