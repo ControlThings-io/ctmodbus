@@ -122,7 +122,7 @@ def do_close():
     """
     Close the open session
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'  # ToDo assert session type
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'  # ToDo assert session type
     ctmodbus.session.close()
     message_dialog(
         title = 'Success',
@@ -141,7 +141,7 @@ def do_read_id():
     """
     Read device identification data
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     request = ReadDeviceInformationRequest(unit=1)
     response = ctmodbus.session.execute(request)
     message_dialog(title="Response", text = str(response))
@@ -156,7 +156,7 @@ def do_read_discreteInputs(csr:str, max:int=2000):
     :PARAM: csr: Comma separated ranges to read
     :PARAM: max: Optional max addresses to read per request (default 2000)
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     desc = 'Modbus Function 2, Read Discrete Inputs'
     results = {}
     output_text = ctmodbus.output_text
@@ -179,7 +179,7 @@ def do_read_coils(csr:str, max:int=2000):
     :PARAM: csr: Comma separated ranges to read
     :PARAM: max: Optional max addresses to read per request (default 2000)
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     desc = 'Modbus Function 1, Read Coils'
     results = {}
     output_text = ctmodbus.output_text
@@ -202,7 +202,7 @@ def do_read_inputRegisters(csr:str, max:int=125):
     :PARAM: csr: Comma separated ranges to read
     :PARAM: max: Optional max addresses to read per request (default 125)
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     desc = 'Modbus Function 4, Read Input Registers'
     results = {}
     output_text = ctmodbus.output_text
@@ -225,7 +225,7 @@ def do_read_holdingRegisters(csr:str, max:int=125):
     :PARAM: csr: Comma separated ranges to read
     :PARAM: max: Optional max addresses to read per request (default 125)
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     desc = 'Modbus Function 3, Read Holding Registers'
     results = {}
     output_text = ctmodbus.output_text
@@ -253,7 +253,7 @@ def do_write_registers(address:int, values:GreedyInt):
     :PARAM: address: Modbus address to start writes
     :PARAM: values: Space separated integers to write
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     if len(values) == 1:
         ctmodbus.session.write_register(address, values[0], unit=unit_id)
         desc = 'Modbus Function 6, Write Single Register'
@@ -280,7 +280,7 @@ def do_write_coils(address:int, values:GreedyBin):
     :PARAM: address: Modbus address to start writes
     :PARAM: values: Space separated list of True or False to write
     """
-    assert (ctmodbus.session), 'There is not an open session.  Connect to one first'
+    assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
     if len(values) == 1:
         ctmodbus.session.write_coil(address, values[0], unit=unit_id)
         desc = 'Modbus Function 5, Write Single Coil'

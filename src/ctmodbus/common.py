@@ -112,8 +112,7 @@ def validate_serial_device(device):
     :PARAM: 
     """
     devices = [x.device for x in comports()]
-    devices_pretty = '\n'.join([x for x in devices])
-    assert (device in devices), '{} is not in: \n{}'.format(device, devices_pretty)
+    assert (device in devices), '{} is not in: \n{} '.format(device, list_serial_devices())
     return device
 
 
