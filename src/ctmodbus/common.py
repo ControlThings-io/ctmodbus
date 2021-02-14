@@ -13,6 +13,12 @@ Control Things Modbus, aka ctmodbus.py
 # details at <http://www.gnu.org/licenses/>.
 """
 
+import serial.tools.list_ports
+from tabulate import tabulate
+from datetime import datetime
+from ctui.dialogs import message_dialog
+
+
 class Loops(object):
     '''Object that contains and calculates a list of range parameters'''
     from sys import maxsize
@@ -95,3 +101,115 @@ class Loops(object):
                 self.loops.append({'start':start, 'stop':stop+1, 'count':count})
                 self.length += 1
                 self.enum_length += count
+
+
+def validate_serial_device(device):
+    """
+
+
+    :PARAM: 
+    """
+    devices = [x.device for x in serial.tools.list_ports.comports()]
+    devices_pretty = '\n'.join([x for x in devices])
+    assert (device in devices), '{} is not in: \n{}'.format(device, devices_pretty)
+    return device
+
+
+def parse_ip_port(ip_port):
+    """
+
+
+    :PARAM: 
+    """
+    parts = ip_port.split(':')
+    assert (0 < len(parts) < 3), 'Must be in format ip or host or ip:port or host:port'
+    host = parts[0]
+    port = 502
+    if len(parts) == 2:
+        port = int(parts[1])
+    return host, port
+
+
+def log_and_output_bits(desc, start, stop, results):
+    """
+    Log in project database and output to screen
+
+    :PARAM: 
+    """
+    date, time = str(datetime.today()).split()
+    output_text = '{} {} - {}'.format(date, time, desc)
+    i = 0
+    for address in range(start, stop):
+        # Finish line after 32 bits of output
+        if i % 32 == 0: output_text += '\n{:>5}:  '.format(address)
+        i += 1
+        # Print next bit
+        output_text += str(results[address])
+        # Print spaces ever 4 bits
+        if i % 4 == 0: output_text += ' '
+    # TODO: Add to self.storage
+    output_text += '\n'
+    return output_text
+
+
+def log_and_output_words(desc, start, stop, results):
+    """
+    Log in project database and output to screen
+
+    :PARAM: 
+    """
+    date, time = str(datetime.today()).split()
+    output_text = '{} {} - {}'.format(date, time, desc)
+    i = 0
+    for address in range(start, stop):
+        # Finish line after 8 words of output
+        if i % 8 == 0: output_text += '\n{:>5}:  '.format(address)
+        i += 1
+        # Print next word
+        output_text += '{:04x}'.format(results[address]) + ' '
+    # TODO: Add to storage
+    output_text += '\n'
+    return output_text
+
+
+def response_message_dialog(message, results):
+    """
+
+
+    :PARAM: 
+    """
+    la, lr, fa = None, None, None  #last_addres, last_result, first_address
+    table = [['Addr', 'Int', 'HEX', 'ASCII']]
+    for address, result in results.items():
+        if address - 1 == la and result == lr:
+            if fa == None:
+                fa = la
+        elif la != None:
+            if fa == None:
+                table.append([la, lr, '{:04x}'.format(lr), str(chr(lr))])
+                fa = None
+            else:
+                s = '{0}-{1}'.format(fa, la)
+                table.append([s, lr, '{:04x}'.format(lr), str(chr(lr))])
+                fa = None
+        la, lr = address, result
+    # Print final output from for loop
+    if fa == None:
+        table.append([la, lr, '{:04x}'.format(lr), str(chr(lr))])
+    else:
+        s = '{0}-{1}'.format(fa, la)
+        table.append([s, lr, '{:04x}'.format(lr), str(chr(lr))])
+    message += tabulate(table, headers='firstrow', tablefmt='simple')
+    message_dialog(title='Success', text=message)
+
+
+def csr_to_ranges(csr, max):
+    """
+    Generator to convert csr to ranges
+
+    :PARAM: csr: Comma separated list of values or ranges
+    :PARAM: max: Maximum number a range can have
+    """
+    loops = Loops(csr, minimum=0, maximum=65535)
+    for loop in loops.max_count(max):
+        yield loop.values()
