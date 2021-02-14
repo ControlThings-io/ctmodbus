@@ -157,7 +157,7 @@ def do_read_discreteInputs(csr:str, max:int=2000):
     :PARAM: max: Optional max addresses to read per request (default 2000)
     """
     assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
-    desc = 'Modbus Function 2, Read Discrete Inputs'
+    desc = '(2) Read DisIn'
     results = {}
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
@@ -167,7 +167,7 @@ def do_read_discreteInputs(csr:str, max:int=2000):
         output_text += common.log_and_output_bits(desc, start, stop, results)
     ranges = csr.split()[0]
     message = '{}: {}\n\n'.format(desc, ranges)
-    common.response_message_dialog(message, results)
+    common.summarize_bit_responses(message, results)
     return output_text
 
 
@@ -180,7 +180,7 @@ def do_read_coils(csr:str, max:int=2000):
     :PARAM: max: Optional max addresses to read per request (default 2000)
     """
     assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
-    desc = 'Modbus Function 1, Read Coils'
+    desc = '(1) Read Coils'
     results = {}
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
@@ -190,7 +190,7 @@ def do_read_coils(csr:str, max:int=2000):
         output_text += common.log_and_output_bits(desc, start, stop, results)
     ranges = csr.split()[0]
     message = '{}: {}\n\n'.format(desc, ranges)
-    common.response_message_dialog(message, results)
+    common.summarize_bit_responses(message, results)
     return output_text
 
 
@@ -203,7 +203,7 @@ def do_read_inputRegisters(csr:str, max:int=125):
     :PARAM: max: Optional max addresses to read per request (default 125)
     """
     assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
-    desc = 'Modbus Function 4, Read Input Registers'
+    desc = '(4) Read InReg'
     results = {}
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
@@ -213,7 +213,7 @@ def do_read_inputRegisters(csr:str, max:int=125):
         output_text += common.log_and_output_words(desc, start, stop, results)
     ranges = csr.split()[0]
     message = '{}: {}\n\n'.format(desc, ranges)
-    common.response_message_dialog(message, results)
+    common.summarize_word_responses(message, results)
     return output_text
 
 
@@ -226,7 +226,7 @@ def do_read_holdingRegisters(csr:str, max:int=125):
     :PARAM: max: Optional max addresses to read per request (default 125)
     """
     assert (ctmodbus.session), 'There is not an open session.  Connect to one first.'
-    desc = 'Modbus Function 3, Read Holding Registers'
+    desc = '(3) Read HoReg'
     results = {}
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
@@ -236,7 +236,7 @@ def do_read_holdingRegisters(csr:str, max:int=125):
         output_text += common.log_and_output_words(desc, start, stop, results)
     ranges = csr.split()[0]
     message = '{}: {}\n\n'.format(desc, ranges)
-    common.response_message_dialog(message, results)
+    common.summarize_word_responses(message, results)
     return output_text
 
 

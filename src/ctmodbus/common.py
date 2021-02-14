@@ -170,16 +170,14 @@ def log_and_output_bits(desc, start, stop, results):
     :PARAM: 
     """
     date, time = str(datetime.today()).split()
-    output_text = '{} {} - {}'.format(date, time, desc)
+    output_text = '{} {} - {} {}-{}: '.format(date, time, desc, start, stop-1)
     i = 0
     for address in range(start, stop):
-        # Finish line after 32 bits of output
-        if i % 32 == 0: output_text += '\n{:>5}:  '.format(address)
-        i += 1
         # Print next bit
         output_text += str(results[address])
         # Print spaces ever 4 bits
-        if i % 4 == 0: output_text += ' '
+        i += 1
+        if i % 5 == 0: output_text += ' '
     # TODO: Add to self.storage
     output_text += '\n'
     return output_text
@@ -192,27 +190,58 @@ def log_and_output_words(desc, start, stop, results):
     :PARAM: 
     """
     date, time = str(datetime.today()).split()
-    output_text = '{} {} - {}'.format(date, time, desc)
+    output_text = '{} {} - {} {}-{}: '.format(date, time, desc, start, stop-1)
     i = 0
     for address in range(start, stop):
-        # Finish line after 8 words of output
-        if i % 8 == 0: output_text += '\n{:>5}:  '.format(address)
-        i += 1
-        # Print next word
+        # Print spaces ever word
         output_text += '{:04x}'.format(results[address]) + ' '
+        # Print extra spaces ever 5 words
+        i += 1
+        if i % 5 == 0: output_text += ' '
     # TODO: Add to storage
     output_text += '\n'
     return output_text
 
 
-def response_message_dialog(message, results):
+def summarize_bit_responses(message, results):
     """
-
+    Summarize bit responses in message dialog
 
     :PARAM: 
     """
     la, lr, fa = None, None, None  #last_addres, last_result, first_address
-    table = [['Addr', 'Int', 'HEX', 'ASCII']]
+    table = [['Addr', 'Bit']]
+    for address, result in results.items():
+        if address - 1 == la and result == lr:
+            if fa == None:
+                fa = la
+        elif la != None:
+            if fa == None:
+                table.append([la, lr])
+                fa = None
+            else:
+                s = '{0}-{1}'.format(fa, la)
+                table.append([s, lr])
+                fa = None
+        la, lr = address, result
+    # Print final output from for loop
+    if fa == None:
+        table.append([la, lr])
+    else:
+        s = '{0}-{1}'.format(fa, la)
+        table.append([s, lr])
+    message += tabulate(table, headers='firstrow', tablefmt='simple')
+    message_dialog(title='Success', text=message)
+
+
+def summarize_word_responses(message, results):
+    """
+    Summarize word reseponses in message dialog
+
+    :PARAM: 
+    """
+    la, lr, fa = None, None, None  #last_addres, last_result, first_address
+    table = [['Addr', 'Int', 'HEX', 'UTF-8']]
     for address, result in results.items():
         if address - 1 == la and result == lr:
             if fa == None:
