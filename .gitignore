@@ -7,4 +7,3 @@ dist/
 ctmodbus.egg-info/
 .venv/
 build/
-.vscode/settings.json

@@ -1,0 +1,56 @@
+[tool.poetry]
+name = "ctmodbus"
+version = "0.5.2"
+description = "A highly flexible Modbus tool made for penetration testers"
+authors = ["Justin Searle <justin@controlthings.io>"]
+license = "LGPL-3.0-or-later"
+readme = "README.md"
+homepage = "https://www.controlthings.io"
+repository = "https://github.com/ControlThings-io/ctmodbus"
+keywords = ["Modbus", "test", "ICS", "control", "ControlThings"]
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Developers',
+    'Intended Audience :: Information Technology',
+    'Intended Audience :: Manufacturing',
+    'Intended Audience :: Other Audience',    
+    'Intended Audience :: Science/Research',
+    'Operating System :: Unix',
+    'Operating System :: POSIX',
+    'Operating System :: Microsoft :: Windows',
+    'Topic :: Utilities',
+]
+
+[tool.poetry.dependencies]
+python = "^3.6"
+ctui = "~0.7.3"
+pyserial = "^3.5"
+pymodbus = "^2.4.0"
+tabulate = "^0.8.9"
+psutil = "^5.8.0"
+
+[tool.poetry.dev-dependencies]
+pylint = "^2.7.2"
+black = "^20.8b1"
+isort = "^5.7.0"
+
+[tool.poetry.scripts]
+ctmodbus = "ctmodbus.commands:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pylint.messages_control]
+disable = "C0330, C0326"
+
+[tool.pylint.format]
+max-line-length = "88"
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
