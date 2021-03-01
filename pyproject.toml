@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ctmodbus"
-version = "0.5.2"
+version = "0.5.3"
 description = "A highly flexible Modbus tool made for penetration testers"
 authors = ["Justin Searle <justin@controlthings.io>"]
 license = "LGPL-3.0-or-later"
