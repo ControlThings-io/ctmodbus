@@ -12,14 +12,15 @@ Control Things Modbus, aka ctmodbus.py
 # FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
 # details at <http://www.gnu.org/licenses/>.
 """
-from ctmodbus import common
+
 from ctui import Ctui
 from ctui.dialogs import message_dialog
-from ctui.types import GreedyInt, GreedyBin
-from pymodbus.client.sync import ModbusTcpClient, ModbusUdpClient, ModbusSerialClient
-from pymodbus.mei_message import ReadDeviceInformationRequest
+from ctui.types import GreedyBin, GreedyInt
 from pkg_resources import get_distribution
+from pymodbus.client.sync import ModbusSerialClient, ModbusTcpClient, ModbusUdpClient
+from pymodbus.mei_message import ReadDeviceInformationRequest
 
+from ctmodbus import common
 
 ctmodbus = Ctui()
 ctmodbus.name = "ctmodbus"

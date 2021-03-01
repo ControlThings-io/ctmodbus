@@ -15,18 +15,20 @@ Control Things Modbus, aka ctmodbus.py
 
 import operator
 from datetime import datetime
-from serial.tools.list_ports import comports
-from psutil import net_connections, Process
-from tabulate import tabulate
+
 from ctui.dialogs import message_dialog
+from psutil import Process, net_connections
+from serial.tools.list_ports import comports
+from tabulate import tabulate
 
 
 class Loops(object):
-    '''Object that contains and calculates a list of range parameters'''
+    """Object that contains and calculates a list of range parameters"""
+
     from sys import maxsize
 
     def __init__(self, csr=None, minimum=-maxsize, maximum=maxsize):
-        assert (isinstance(csr, str) or csr == None), 'csr must be a string'
+        assert isinstance(csr, str) or csr == None, "csr must be a string"
         self.csr = csr or None
         self.loops = []
         self.length = 0
@@ -45,31 +47,33 @@ class Loops(object):
             yield loop
 
     def max_count(self, max_count):
-        assert (isinstance(max_count, int)), 'max_count must be int'
+        assert isinstance(max_count, int), "max_count must be int"
         for loop in self.loops:
-            for i in range(0, loop['count'], max_count):
+            for i in range(0, loop["count"], max_count):
                 start, stop, count = loop.values()
-                yield {'start': start + i,
-                       'stop': min(start + max_count + i, stop),
-                       'count': min(max_count, count - i) }
+                yield {
+                    "start": start + i,
+                    "stop": min(start + max_count + i, stop),
+                    "count": min(max_count, count - i),
+                }
 
     def append(self, start, stop=None, count=None):
         """Append a new loop"""
-        assert (isinstance(start, int)), 'start must be an int'
-        assert (stop or count), 'must set stop or count'
+        assert isinstance(start, int), "start must be an int"
+        assert stop or count, "must set stop or count"
         if stop and not count:
             count = stop - start + 1
         elif count and not stop:
             stop = start + count - 1
-        assert (count == stop - start + 1), 'count must equal stop - start + 1'
-        self.loops.append({'start':start, 'stop':stop, 'count':count})
+        assert count == stop - start + 1, "count must equal stop - start + 1"
+        self.loops.append({"start": start, "stop": stop, "count": count})
         self.length += 1
         self.enum_length += count
 
     def enum(self, func=None):
         """Use ranges to enumerate every increment"""
         for loop in self.loops:
-            for x in range(loop['start'], loop['stop']):
+            for x in range(loop["start"], loop["stop"]):
                 if func:
                     yield func(x)
                 else:
@@ -77,30 +81,38 @@ class Loops(object):
 
     def _from_int_csr(self, csr, minimum, maximum):
         """Converts comma separated int ranges to range() functions"""
-        assert (isinstance(csr, str)), 'csr must be a string like "1-5,10,13-15"'
-        assert (isinstance(minimum, int)), 'minimum must be int'
+        assert isinstance(csr, str), 'csr must be a string like "1-5,10,13-15"'
+        assert isinstance(minimum, int), "minimum must be int"
         self.minimum = minimum
-        assert (isinstance(maximum, int)), 'maximum must be int'
+        assert isinstance(maximum, int), "maximum must be int"
         self.maximum = maximum
-        parts = csr.split(',')
+        parts = csr.split(",")
         for single_or_range in parts:
             if single_or_range.isdigit():
                 single = int(single_or_range)
-                assert (minimum <= single <= maximum), '{} is not between {} and {}'.format(single, minimum, maximum)
-                self.loops.append({'start':single, 'stop':single+1, 'count':1})
+                assert (
+                    minimum <= single <= maximum
+                ), "{} is not between {} and {}".format(single, minimum, maximum)
+                self.loops.append({"start": single, "stop": single + 1, "count": 1})
                 self.length += 1
                 self.enum_length += 1
             else:
-                a_range = single_or_range.split('-')
-                assert (len(a_range) == 2), '{} is not a valid range'.format(a_range)
+                a_range = single_or_range.split("-")
+                assert len(a_range) == 2, "{} is not a valid range".format(a_range)
                 start, stop = a_range
-                assert (start.isdigit() and stop.isdigit()), '{} and {} must be integers'.format(start, stop)
+                assert (
+                    start.isdigit() and stop.isdigit()
+                ), "{} and {} must be integers".format(start, stop)
                 start, stop = int(start), int(stop)
-                assert (minimum <= start <= maximum), '{} is not between {} and {}'.format(start, minimum, maximum)
-                assert (minimum <= stop <= maximum), '{} is not between {} and {}'.format(stop, minimum, maximum)
-                assert (start < stop), '{} must be less than {}'.format(start, stop)
+                assert (
+                    minimum <= start <= maximum
+                ), "{} is not between {} and {}".format(start, minimum, maximum)
+                assert minimum <= stop <= maximum, "{} is not between {} and {}".format(
+                    stop, minimum, maximum
+                )
+                assert start < stop, "{} must be less than {}".format(start, stop)
                 count = stop - start + 1
-                self.loops.append({'start':start, 'stop':stop+1, 'count':count})
+                self.loops.append({"start": start, "stop": stop + 1, "count": count})
                 self.length += 1
                 self.enum_length += count
 
@@ -109,32 +121,34 @@ def validate_serial_device(device):
     """
 
 
-    :PARAM: 
+    :PARAM:
     """
     devices = [x.device for x in comports()]
-    assert (device in devices), '{} is not in: \n{} '.format(device, list_serial_devices())
+    assert device in devices, "{} is not in: \n{} ".format(
+        device, list_serial_devices()
+    )
     return device
 
 
 def list_serial_devices():
-    headers = ['DEVICE', 'MANUFACTURER', 'PRODUCT ID']
+    headers = ["DEVICE", "MANUFACTURER", "PRODUCT ID"]
     rows = []
-    for dev in comports(): 
+    for dev in comports():
         columns = []
         columns.append(dev.device)
         columns.append(dev.manufacturer)
         columns.append(dev.product)
         rows.append(columns)
     table = sorted(rows, key=operator.itemgetter(0))
-    return tabulate(table, headers=headers, tablefmt='fancy_grid')
+    return tabulate(table, headers=headers, tablefmt="fancy_grid")
 
 
 def list_listening_ports():
     conns = net_connections()
-    headers = ['IP', 'PORT', 'PROCESS']
+    headers = ["IP", "PORT", "PROCESS"]
     rows = []
     for conn in conns:
-        if (conn[5] == 'LISTEN'):
+        if conn[5] == "LISTEN":
             collumns = []
             collumns.append(conn[3][0])
             collumns.append(conn[3][1])
@@ -142,20 +156,20 @@ def list_listening_ports():
                 process = Process(conn[6])
                 collumns.append(process.name())
             else:
-                collumns.append('')
+                collumns.append("")
             rows.append(collumns)
     table = sorted(rows, key=operator.itemgetter(1))
-    return tabulate(table, headers=headers, tablefmt='fancy_grid')
+    return tabulate(table, headers=headers, tablefmt="fancy_grid")
 
 
 def parse_ip_port(ip_port):
     """
 
 
-    :PARAM: 
+    :PARAM:
     """
-    parts = ip_port.split(':')
-    assert (0 < len(parts) < 3), 'Must be in format ip or host or ip:port or host:port'
+    parts = ip_port.split(":")
+    assert 0 < len(parts) < 3, "Must be in format ip or host or ip:port or host:port"
     host = parts[0]
     port = 502
     if len(parts) == 2:
@@ -167,19 +181,20 @@ def log_and_output_bits(desc, start, stop, results):
     """
     Log in project database and output to screen
 
-    :PARAM: 
+    :PARAM:
     """
     date, time = str(datetime.today()).split()
-    output_text = '{} {} - {} {}-{}: '.format(date, time, desc, start, stop-1)
+    output_text = "{} {} - {} {}-{}: ".format(date, time, desc, start, stop - 1)
     i = 0
     for address in range(start, stop):
         # Print next bit
         output_text += str(results[address])
         # Print spaces ever 4 bits
         i += 1
-        if i % 5 == 0: output_text += ' '
+        if i % 5 == 0:
+            output_text += " "
     # TODO: Add to self.storage
-    output_text += '\n'
+    output_text += "\n"
     return output_text
 
 
@@ -187,19 +202,20 @@ def log_and_output_words(desc, start, stop, results):
     """
     Log in project database and output to screen
 
-    :PARAM: 
+    :PARAM:
     """
     date, time = str(datetime.today()).split()
-    output_text = '{} {} - {} {}-{}: '.format(date, time, desc, start, stop-1)
+    output_text = "{} {} - {} {}-{}: ".format(date, time, desc, start, stop - 1)
     i = 0
     for address in range(start, stop):
         # Print spaces ever word
-        output_text += '{:04x}'.format(results[address]) + ' '
+        output_text += "{:04x}".format(results[address]) + " "
         # Print extra spaces ever 5 words
         i += 1
-        if i % 5 == 0: output_text += ' '
+        if i % 5 == 0:
+            output_text += " "
     # TODO: Add to storage
-    output_text += '\n'
+    output_text += "\n"
     return output_text
 
 
@@ -207,10 +223,10 @@ def summarize_bit_responses(message, results):
     """
     Summarize bit responses in message dialog
 
-    :PARAM: 
+    :PARAM:
     """
-    la, lr, fa = None, None, None  #last_addres, last_result, first_address
-    table = [['Addr', 'Bit']]
+    la, lr, fa = None, None, None  # last_addres, last_result, first_address
+    table = [["Addr", "Bit"]]
     for address, result in results.items():
         if address - 1 == la and result == lr:
             if fa == None:
@@ -220,7 +236,7 @@ def summarize_bit_responses(message, results):
                 table.append([la, lr])
                 fa = None
             else:
-                s = '{0}-{1}'.format(fa, la)
+                s = "{0}-{1}".format(fa, la)
                 table.append([s, lr])
                 fa = None
         la, lr = address, result
@@ -228,41 +244,41 @@ def summarize_bit_responses(message, results):
     if fa == None:
         table.append([la, lr])
     else:
-        s = '{0}-{1}'.format(fa, la)
+        s = "{0}-{1}".format(fa, la)
         table.append([s, lr])
-    message += tabulate(table, headers='firstrow', tablefmt='simple')
-    message_dialog(title='Success', text=message)
+    message += tabulate(table, headers="firstrow", tablefmt="simple")
+    message_dialog(title="Success", text=message)
 
 
 def summarize_word_responses(message, results):
     """
     Summarize word reseponses in message dialog
 
-    :PARAM: 
+    :PARAM:
     """
-    la, lr, fa = None, None, None  #last_addres, last_result, first_address
-    table = [['Addr', 'Int', 'HEX', 'UTF-8']]
+    la, lr, fa = None, None, None  # last_addres, last_result, first_address
+    table = [["Addr", "Int", "HEX", "UTF-8"]]
     for address, result in results.items():
         if address - 1 == la and result == lr:
             if fa == None:
                 fa = la
         elif la != None:
             if fa == None:
-                table.append([la, lr, '{:04x}'.format(lr), str(chr(lr))])
+                table.append([la, lr, "{:04x}".format(lr), str(chr(lr))])
                 fa = None
             else:
-                s = '{0}-{1}'.format(fa, la)
-                table.append([s, lr, '{:04x}'.format(lr), str(chr(lr))])
+                s = "{0}-{1}".format(fa, la)
+                table.append([s, lr, "{:04x}".format(lr), str(chr(lr))])
                 fa = None
         la, lr = address, result
     # Print final output from for loop
     if fa == None:
-        table.append([la, lr, '{:04x}'.format(lr), str(chr(lr))])
+        table.append([la, lr, "{:04x}".format(lr), str(chr(lr))])
     else:
-        s = '{0}-{1}'.format(fa, la)
-        table.append([s, lr, '{:04x}'.format(lr), str(chr(lr))])
-    message += tabulate(table, headers='firstrow', tablefmt='simple')
-    message_dialog(title='Success', text=message)
+        s = "{0}-{1}".format(fa, la)
+        table.append([s, lr, "{:04x}".format(lr), str(chr(lr))])
+    message += tabulate(table, headers="firstrow", tablefmt="simple")
+    message_dialog(title="Success", text=message)
 
 
 def csr_to_ranges(csr, max):
