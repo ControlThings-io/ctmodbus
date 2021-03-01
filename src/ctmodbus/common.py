@@ -14,6 +14,7 @@ Control Things Modbus, aka ctmodbus.py
 """
 
 import operator
+import socket
 from datetime import datetime
 
 from ctui.dialogs import message_dialog
@@ -117,11 +118,25 @@ class Loops(object):
                 self.enum_length += count
 
 
+def validate_ip_service(host, port, proto):
+    """
+    Verify port is open
+
+    :PARAM: host: Any valid hostname or ipv4/6 ip address
+    :PARAM: port: Any valid port name or number
+    :PARAM: proto: Any valid socket.IPPROTO_*
+    """
+    l = socket.getaddrinfo(host, port, proto=proto)[0]
+    af, socktype, proto, canonname, sa = l
+    with socket.socket(af, socktype, proto) as s:
+        assert s.connect_ex(sa) == 0, "Can not connect to {}:{}".format(host, port)
+
+
 def validate_serial_device(device):
     """
+    Verify requested serial device is connected to the system
 
-
-    :PARAM:
+    :PARAM: device: A device file path or comm port
     """
     devices = [x.device for x in comports()]
     assert device in devices, "{} is not in: \n{} ".format(
@@ -164,12 +179,11 @@ def list_listening_ports():
 
 def parse_ip_port(ip_port):
     """
+    Separate ip/host and port from unified address
 
-
-    :PARAM:
+    :PARAM: ip_port: Any address in ip or ip:port format
     """
-    parts = ip_port.split(":")
-    assert 0 < len(parts) < 3, "Must be in format ip or host or ip:port or host:port"
+    parts = ip_port.rsplit(":", 1)
     host = parts[0]
     port = 502
     if len(parts) == 2:

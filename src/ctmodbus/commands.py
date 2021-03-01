@@ -13,6 +13,8 @@ Control Things Modbus, aka ctmodbus.py
 # details at <http://www.gnu.org/licenses/>.
 """
 
+import socket
+
 from ctui import Ctui
 from ctui.dialogs import message_dialog
 from ctui.types import GreedyBin, GreedyInt
@@ -98,7 +100,8 @@ def do_connect_tcp(host_port: str):
         ctmodbus.session == None
     ), "Session already open.  Close first."  # ToDo assert session type
     host, port = common.parse_ip_port(host_port)
-    ctmodbus.session = ModbusTcpClient(host, port)
+    common.validate_ip_service(host, port, socket.IPPROTO_TCP)
+    ctmodbus.session = ModbusTcpClient(host, port, timeout=3)
     message_dialog(title="Success", text="Session opened with {}:{}".format(host, port))
 
 
@@ -113,7 +116,8 @@ def do_connect_udp(host_port: str):
         ctmodbus.session == None
     ), "Session already open.  Close first."  # ToDo assert session type
     host, port = common.parse_ip_port(host_port)
-    ctmodbus.session = ModbusUdpClient(host, port)
+    common.validate_ip_service(host, port, socket.IPPROTO_UDP)
+    ctmodbus.session = ModbusUdpClient(host, port, timeout=3)
     message_dialog(title="Success", text="Session opened with {}:{}".format(host, port))
 
 
@@ -164,6 +168,7 @@ def do_read_discreteInputs(csr: str, max: int = 2000):
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
         response = ctmodbus.session.read_discrete_inputs(start, count, unit=unit_id)
+        assert hasattr(response, "bits"), "No response received"
         for address, result in zip(range(start, stop), response.bits):
             results[address] = int(result)
         output_text += common.log_and_output_bits(desc, start, stop, results)
@@ -187,6 +192,7 @@ def do_read_coils(csr: str, max: int = 2000):
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
         response = ctmodbus.session.read_coils(start, count, unit=unit_id)
+        assert hasattr(response, "bits"), "No response received"
         for address, result in zip(range(start, stop), response.bits):
             results[address] = int(result)
         output_text += common.log_and_output_bits(desc, start, stop, results)
@@ -210,6 +216,7 @@ def do_read_inputRegisters(csr: str, max: int = 125):
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
         response = ctmodbus.session.read_input_registers(start, count, unit=unit_id)
+        assert hasattr(response, "registers"), "No response received"
         for address, result in zip(range(start, stop), response.registers):
             results[address] = result
         output_text += common.log_and_output_words(desc, start, stop, results)
@@ -233,6 +240,7 @@ def do_read_holdingRegisters(csr: str, max: int = 125):
     output_text = ctmodbus.output_text
     for start, stop, count in common.csr_to_ranges(csr, max):
         response = ctmodbus.session.read_holding_registers(start, count, unit=unit_id)
+        assert hasattr(response, "registers"), "No response received"
         for address, result in zip(range(start, stop), response.registers):
             results[address] = result
         output_text += common.log_and_output_words(desc, start, stop, results)
@@ -248,9 +256,9 @@ def do_write():
 
 
 @ctmodbus.command
-def do_write_registers(address: int, values: GreedyInt):
+def do_write_register(address: int, values: GreedyInt):
     """
-    Write to registers in format: <address> <int>...
+    Write single register in format: <address> <int>
 
     :PARAM: address: Modbus address to start writes
     :PARAM: values: Space separated integers to write
@@ -270,14 +278,13 @@ def do_write_registers(address: int, values: GreedyInt):
         results[address + i] = values[i]
     output_text = ctmodbus.output_text
     output_text += common.log_and_output_words(desc, address, stop, results)
-    output_text += f"debug: {values}"
     return output_text
 
 
 @ctmodbus.command
-def do_write_coils(address: int, values: GreedyBin):
+def do_write_coil(address: int, values: GreedyBin):
     """
-    Write to coils in format: <address> <True/False>...
+    Write single coil in format: <address> <0 or 1>
 
     :PARAM: address: Modbus address to start writes
     :PARAM: values: Space separated list of True or False to write
@@ -297,7 +304,6 @@ def do_write_coils(address: int, values: GreedyBin):
         results[address + i] = int(values[i])
     output_text = ctmodbus.output_text
     output_text += common.log_and_output_bits(desc, address, stop, results)
-    output_text += f"debug: {values}"
     return output_text
 
 
