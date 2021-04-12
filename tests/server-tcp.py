@@ -38,7 +38,7 @@ def run_server():
     identity.ModelName = "Pymodbus Server"
     identity.MajorMinorRevision = version.short()
 
-    StartTcpServer(context, identity=identity, address=("localhost", 5020))
+    StartTcpServer(context, identity=identity, address=("127.0.0.1", 5020))
 
 
 if __name__ == "__main__":
