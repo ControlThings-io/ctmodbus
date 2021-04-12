@@ -118,20 +118,6 @@ class Loops(object):
                 self.enum_length += count
 
 
-def validate_ip_service(host, port, proto):
-    """
-    Verify port is open
-
-    :PARAM: host: Any valid hostname or ipv4/6 ip address
-    :PARAM: port: Any valid port name or number
-    :PARAM: proto: Any valid socket.IPPROTO_*
-    """
-    l = socket.getaddrinfo(host, port, proto=proto)[0]
-    af, socktype, proto, canonname, sa = l
-    with socket.socket(af, socktype, proto) as s:
-        assert s.connect_ex(sa) == 0, "Can not connect to {}:{}".format(host, port)
-
-
 def validate_serial_device(device):
     """
     Verify requested serial device is connected to the system
