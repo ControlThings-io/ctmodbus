@@ -71,7 +71,7 @@ def do_connect_ascii(device: str):
     ), "Session already open.  Close first."  # ToDo assert session type
     valid_device = common.validate_serial_device(device)
     s = ModbusSerialClient(method="ascii", port=valid_device, timeout=1)
-    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    assert s.connect(), f"Could not connect to {valid_device}"
     ctmodbus.session = s
     return ctmodbus.output_text + f"Session OPENED with {valid_device}\n"
 
@@ -88,7 +88,7 @@ def do_connect_rtu(device: str):
     ), "Session already open.  Close first."  # ToDo assert session type
     valid_device = common.validate_serial_device(device)
     s = ModbusSerialClient(method="rtu", port=valid_device, timeout=1)
-    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    assert s.connect(), f"Could not connect to {valid_device}"
     ctmodbus.session = s
     return ctmodbus.output_text + f"Session OPENED with {valid_device}\n"
 
