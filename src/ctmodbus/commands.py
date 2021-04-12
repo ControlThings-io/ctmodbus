@@ -70,8 +70,10 @@ def do_connect_ascii(device: str):
         ctmodbus.session == None
     ), "Session already open.  Close first."  # ToDo assert session type
     valid_device = common.validate_serial_device(device)
-    ctmodbus.session = ModbusSerialClient(method="ascii", port=valid_device, timeout=1)
-    message_dialog(title="Success", text="Session opened with {}".format(valid_device))
+    s = ModbusSerialClient(method="ascii", port=valid_device, timeout=1)
+    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    ctmodbus.session = s
+    return ctmodbus.output_text + f"Session OPENED with {valid_device}\n"
 
 
 @ctmodbus.command
@@ -85,8 +87,10 @@ def do_connect_rtu(device: str):
         ctmodbus.session == None
     ), "Session already open.  Close first."  # ToDo assert session type
     valid_device = common.validate_serial_device(device)
-    ctmodbus.session = ModbusSerialClient(method="rtu", port=valid_device, timeout=1)
-    message_dialog(title="Success", text="Session opened with {}".format(valid_device))
+    s = ModbusSerialClient(method="rtu", port=valid_device, timeout=1)
+    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    ctmodbus.session = s
+    return ctmodbus.output_text + f"Session OPENED with {valid_device}\n"
 
 
 @ctmodbus.command
@@ -100,9 +104,10 @@ def do_connect_tcp(host_port: str):
         ctmodbus.session == None
     ), "Session already open.  Close first."  # ToDo assert session type
     host, port = common.parse_ip_port(host_port)
-    common.validate_ip_service(host, port, socket.IPPROTO_TCP)
-    ctmodbus.session = ModbusTcpClient(host, port, timeout=3)
-    message_dialog(title="Success", text="Session opened with {}:{}".format(host, port))
+    s = ModbusTcpClient(host, port, timeout=3)
+    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    ctmodbus.session = s
+    return ctmodbus.output_text + f"Session OPENED with {host}:{port}\n"
 
 
 @ctmodbus.command
@@ -117,8 +122,10 @@ def do_connect_udp(host_port: str):
     ), "Session already open.  Close first."  # ToDo assert session type
     host, port = common.parse_ip_port(host_port)
     common.validate_ip_service(host, port, socket.IPPROTO_UDP)
-    ctmodbus.session = ModbusUdpClient(host, port, timeout=3)
-    message_dialog(title="Success", text="Session opened with {}:{}".format(host, port))
+    s = ModbusUdpClient(host, port, timeout=3)
+    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    ctmodbus.session = s
+    return ctmodbus.output_text + f"Session OPENED with {host}:{port}\n"
 
 
 @ctmodbus.command
@@ -130,11 +137,8 @@ def do_close():
         ctmodbus.session
     ), "There is not an open session.  Connect to one first."  # ToDo assert session type
     ctmodbus.session.close()
-    message_dialog(
-        title="Success", text="Session closed with {}".format(ctmodbus.session)
-    )
     ctmodbus.session = None
-    return None
+    return ctmodbus.output_text + "Session CLOSED\n"
 
 
 @ctmodbus.command
