@@ -121,7 +121,6 @@ def do_connect_udp(host_port: str):
         ctmodbus.session == None
     ), "Session already open.  Close first."  # ToDo assert session type
     host, port = common.parse_ip_port(host_port)
-    common.validate_ip_service(host, port, socket.IPPROTO_UDP)
     s = ModbusUdpClient(host, port, timeout=3)
     assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
