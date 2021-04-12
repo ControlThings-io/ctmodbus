@@ -34,7 +34,7 @@ ctmodbus.prompt = "ctmodbus> "
 
 ctmodbus.session = None
 unit_id = 1
-statusbar = "Session:{}".format(ctmodbus.session)
+statusbar = f"Session:{ctmodbus.session}"
 
 
 @ctmodbus.command
@@ -105,7 +105,7 @@ def do_connect_tcp(host_port: str):
     ), "Session already open.  Close first."  # ToDo assert session type
     host, port = common.parse_ip_port(host_port)
     s = ModbusTcpClient(host, port, timeout=3)
-    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
     return ctmodbus.output_text + f"Session OPENED with {host}:{port}\n"
 
@@ -123,7 +123,7 @@ def do_connect_udp(host_port: str):
     host, port = common.parse_ip_port(host_port)
     common.validate_ip_service(host, port, socket.IPPROTO_UDP)
     s = ModbusUdpClient(host, port, timeout=3)
-    assert s.connect(), "Could not connect to {}:{}".format(host, port)
+    assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
     return ctmodbus.output_text + f"Session OPENED with {host}:{port}\n"
 
@@ -177,7 +177,7 @@ def do_read_discreteInputs(csr: str, max: int = 2000):
             results[address] = int(result)
         output_text += common.log_and_output_bits(desc, start, stop, results)
     ranges = csr.split()[0]
-    message = "{}: {}\n\n".format(desc, ranges)
+    message = f"{desc}: {ranges}\n\n"
     common.summarize_bit_responses(message, results)
     return output_text
 
@@ -201,7 +201,7 @@ def do_read_coils(csr: str, max: int = 2000):
             results[address] = int(result)
         output_text += common.log_and_output_bits(desc, start, stop, results)
     ranges = csr.split()[0]
-    message = "{}: {}\n\n".format(desc, ranges)
+    message = f"{desc}: {ranges}\n\n"
     common.summarize_bit_responses(message, results)
     return output_text
 
@@ -225,7 +225,7 @@ def do_read_inputRegisters(csr: str, max: int = 125):
             results[address] = result
         output_text += common.log_and_output_words(desc, start, stop, results)
     ranges = csr.split()[0]
-    message = "{}: {}\n\n".format(desc, ranges)
+    message = f"{desc}: {ranges}\n\n"
     common.summarize_word_responses(message, results)
     return output_text
 
@@ -249,7 +249,7 @@ def do_read_holdingRegisters(csr: str, max: int = 125):
             results[address] = result
         output_text += common.log_and_output_words(desc, start, stop, results)
     ranges = csr.split()[0]
-    message = "{}: {}\n\n".format(desc, ranges)
+    message = f"{desc}: {ranges}\n\n"
     common.summarize_word_responses(message, results)
     return output_text
 
