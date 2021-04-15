@@ -151,10 +151,25 @@ def do_read_id():
     Read device identification data
     """
     assert ctmodbus.session, "There is not an open session.  Connect to one first."
-    request = ReadDeviceInformationRequest(unit=1)
-    response = ctmodbus.session.execute(request)
-    message_dialog(title="Response", text=str(response))
-    return None
+    response = ctmodbus.session.execute(ReadDeviceInformationRequest(unit=1))
+    assert not response.isError(), "Read DevID is not supported"
+    date, time = str(datetime.today()).split()
+    output_text = ctmodbus.output_text
+    keys = [
+        "VendorName",
+        "ProductCode",
+        "MajorMinorRevision",
+        "VendorUrl",
+        "ProductName",
+        "ModelName",
+        "UserApplicationName",
+    ]
+    for i in range(len(response.information)):
+        if i < 7:
+            output_text += f"{date} {time} - (43) Read DevID {keys[i]}: {str(response.information[i])}\n"
+        else:
+            output_text += f"{date} {time} - (43) Read DevID ObjectID {i}: {str(response.information[i])}\n"
+    return output_text
 
 
 @ctmodbus.command
