@@ -14,6 +14,7 @@ Control Things Modbus, aka ctmodbus.py
 """
 
 import socket
+from datetime import datetime
 
 from ctui import Ctui
 from ctui.dialogs import message_dialog
@@ -73,6 +74,7 @@ def do_connect_ascii(device: str):
     s = ModbusSerialClient(method="ascii", port=valid_device, timeout=1)
     assert s.connect(), f"Could not connect to {valid_device}"
     ctmodbus.session = s
+    date, time = str(datetime.today()).split()
     return ctmodbus.output_text + f"ASCII session OPENED with {valid_device}\n"
 
 
@@ -90,7 +92,11 @@ def do_connect_rtu(device: str):
     s = ModbusSerialClient(method="rtu", port=valid_device, timeout=1)
     assert s.connect(), f"Could not connect to {valid_device}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"RTU session OPENED with {valid_device}\n"
+    date, time = str(datetime.today()).split()
+    return (
+        ctmodbus.output_text
+        + f"RTU session OPENED with {valid_device}  at {date} {time}\n"
+    )
 
 
 @ctmodbus.command
@@ -107,7 +113,11 @@ def do_connect_tcp(host_port: str):
     s = ModbusTcpClient(host, port, timeout=3)
     assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"TCP session OPENED with {host}:{port}\n"
+    date, time = str(datetime.today()).split()
+    return (
+        ctmodbus.output_text
+        + f"TCP session OPENED with {host}:{port} at {date} {time}\n"
+    )
 
 
 @ctmodbus.command
@@ -124,7 +134,11 @@ def do_connect_udp(host_port: str):
     s = ModbusUdpClient(host, port, timeout=3)
     assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"UDP session OPENED with {host}:{port}\n"
+    date, time = str(datetime.today()).split()
+    return (
+        ctmodbus.output_text
+        + f"UDP session OPENED with {host}:{port} at {date} {time}\n"
+    )
 
 
 @ctmodbus.command
