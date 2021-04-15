@@ -73,7 +73,7 @@ def do_connect_ascii(device: str):
     s = ModbusSerialClient(method="ascii", port=valid_device, timeout=1)
     assert s.connect(), f"Could not connect to {valid_device}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"Session OPENED with {valid_device}\n"
+    return ctmodbus.output_text + f"ASCII session OPENED with {valid_device}\n"
 
 
 @ctmodbus.command
@@ -90,7 +90,7 @@ def do_connect_rtu(device: str):
     s = ModbusSerialClient(method="rtu", port=valid_device, timeout=1)
     assert s.connect(), f"Could not connect to {valid_device}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"Session OPENED with {valid_device}\n"
+    return ctmodbus.output_text + f"RTU session OPENED with {valid_device}\n"
 
 
 @ctmodbus.command
@@ -107,7 +107,7 @@ def do_connect_tcp(host_port: str):
     s = ModbusTcpClient(host, port, timeout=3)
     assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"Session OPENED with {host}:{port}\n"
+    return ctmodbus.output_text + f"TCP session OPENED with {host}:{port}\n"
 
 
 @ctmodbus.command
@@ -124,7 +124,7 @@ def do_connect_udp(host_port: str):
     s = ModbusUdpClient(host, port, timeout=3)
     assert s.connect(), f"Could not connect to {host}:{port}"
     ctmodbus.session = s
-    return ctmodbus.output_text + f"Session OPENED with {host}:{port}\n"
+    return ctmodbus.output_text + f"UDP session OPENED with {host}:{port}\n"
 
 
 @ctmodbus.command
