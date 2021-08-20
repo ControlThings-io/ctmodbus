@@ -1,11 +1,12 @@
 # Control Things Modbus
 
-The goal of ctmodbus is to become the security professional's Swiss army knife
-for interacting with Modbus devices.  Once completed, features will include
-support for:
+A highly flexible Modbus tool made for penetration testers.
+
+Once completed, features will include support for:
 
 - RTU and ASCII versions of serial Modbus  (DONE)
-- TCP and UDP versions of TCP/IP Modbus  (DONE)
+- TCP and UDP versions of Modbus  (DONE)
+- New TLS version of Modbus (DONE in lib, client IN PROGRESS)
 - Client and server options  (DONE in lib, server IN PROGRESS)
 - All standard Modbus functions  (reads DONE, writes IN PROGRESS)
 - Arbitrary custom Modbus functions
@@ -26,23 +27,23 @@ pip3 install ctmodbus
 ## Examples of current user interface commands once you start ctmodbus:
 
 ```
-> connect tcp:10.10.10.1                          # start a client session
-> connect rtu:/dev/serial                         # works with serial too
-> connect ascii:com2                              # and and windows
-> connect udp:10.10.10.1:10502                    # even udp with custom ports
+> connect tcp 10.10.10.1                          # start a client session
+> connect rtu /dev/serial                         # works with serial too
+> connect ascii COM2                              # and and windows
+> connect udp 10.10.10.1:10502                    # even udp with custom ports
 > read id                                         # read device identifiers
 > read discrete_inputs 1                          # read coils and registers
 > read coils 1,3,5,7                              # with comma separated values
 > read input_register 5,10-30,90-99               # and ranges
 > read holding_register 50 9                      # or start address and count
 > write coils 128 0                               # write single values
-> write coils 76 01101001                         # or multiple values
-> write holding_register 1000 14302 188 305       # registers support int
 ```
 
 ## Planned ui commands once complete:
 
 ```
+> write coils 76 01101001                         # or multiple values
+> write holding_register 1000 14302 188 305       # registers support int
 > write holding_register 1000 "My name is Mud"    # and strings
 > write holding_register 1400 DEADBEEF            # or raw hex
 > poll holding_register 1-10,15-19 1              # poll registers every second

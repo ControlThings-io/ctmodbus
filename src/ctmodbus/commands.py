@@ -28,9 +28,7 @@ from ctmodbus import common
 ctmodbus = Ctui()
 ctmodbus.name = "ctmodbus"
 ctmodbus.version = get_distribution("ctmodbus").version
-ctmodbus.description = (
-    "a security professional's swiss army knife for interacting with Modbus devices"
-)
+ctmodbus.description = "A highly flexible Modbus tool made for penetration testers"
 ctmodbus.prompt = "ctmodbus> "
 
 ctmodbus.session = None
@@ -156,7 +154,7 @@ def do_close():
 
 @ctmodbus.command
 def do_read():
-    """Various modbus read fuctions..."""
+    """Various modbus read functions..."""
 
 
 @ctmodbus.command
