@@ -1,4 +1,4 @@
-# Control Things Modbus
+# ControlThings Modbus
 
 A highly flexible Modbus tool made for penetration testers.
 
