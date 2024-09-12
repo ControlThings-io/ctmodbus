@@ -69,7 +69,7 @@ pip3 install ctmodbus
 > historian tcp:10.1.1.1:9300                     # transactions to cthistorian
 ```
 
-## This tool is built upon these to key library:
+## This tool is built upon these two key libraries:
 
 - [Control Things User Interface](https://github.com/ControlThingsTools/ctui)
 - [PyModbus](https://github.com/bashwork/pymodbus)
