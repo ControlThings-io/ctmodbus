@@ -2,31 +2,29 @@
 
 A highly flexible Modbus tool made for penetration testers.
 
-Once completed, features will include support for:
-
-- RTU and ASCII versions of serial Modbus  (DONE)
-- TCP and UDP versions of Modbus  (DONE)
-- New TLS version of Modbus (DONE in lib, client IN PROGRESS)
-- Client and server options  (DONE in lib, server IN PROGRESS)
-- All standard Modbus functions  (reads DONE, writes IN PROGRESS)
-- Arbitrary custom Modbus functions
-- Reading addresses specified in lists and ranges (DONE)
-- Interval based polling
-- Clone feature to quickly create base data for simulator
-- Proxy feature between two modbus endpoints
-- Export to cthistorian and database
-
 # Installation:
 
-As long as you have git and Python 3.6 or later installed, all you should need to do is:
+As long as you have git and Python 3.8 or later installed, all you should need to do is:
 
-```
+```bash
 pip3 install ctmodbus
+```
+
+Or better yet, if you have `uv` installed, install it in an isolated environment with:
+
+```bash
+uv tool install ctmodbus
+```
+
+`uv` also lets you try the tool out without installing it by running:
+
+```bash
+uvx ctmodbus
 ```
 
 ## Examples of current user interface commands once you start ctmodbus:
 
-```
+```INI
 > connect tcp 10.10.10.1                          # start a client session
 > connect rtu /dev/serial                         # works with serial too
 > connect ascii COM2                              # and and windows
@@ -39,9 +37,9 @@ pip3 install ctmodbus
 > write coils 128 0                               # write single values
 ```
 
-## Planned ui commands once complete:
+## Planned UI commands once complete:
 
-```
+```INI
 > write coils 76 01101001                         # or multiple values
 > write holding_register 1000 14302 188 305       # registers support int
 > write holding_register 1000 "My name is Mud"    # and strings
@@ -75,7 +73,7 @@ pip3 install ctmodbus
 - [PyModbus](https://github.com/bashwork/pymodbus)
 
 
-## Copyright 2021 Justin Searle
+## Copyright 2025 Justin Searle
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
