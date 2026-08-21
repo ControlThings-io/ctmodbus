@@ -15,11 +15,11 @@ Control Things Modbus, aka ctmodbus.py
 
 import socket
 from datetime import datetime
+from importlib.metadata import version
 
 from ctui import Ctui
 from ctui.dialogs import message_dialog
 from ctui.types import GreedyBin, GreedyInt
-from pkg_resources import get_distribution
 from pymodbus.client.sync import ModbusSerialClient, ModbusTcpClient, ModbusUdpClient
 from pymodbus.mei_message import ReadDeviceInformationRequest
 
@@ -27,13 +27,13 @@ from ctmodbus import common
 
 ctmodbus = Ctui()
 ctmodbus.name = "ctmodbus"
-ctmodbus.version = get_distribution("ctmodbus").version
+ctmodbus.version = version("ctmodbus")
 ctmodbus.description = "A highly flexible Modbus tool made for penetration testers"
 ctmodbus.prompt = "ctmodbus> "
 
 ctmodbus.session = None
 unit_id = 1
-statusbar = f"Session:{ctmodbus.session}"
+ctmodbus.statusbar = lambda: f"PROJECT: {ctmodbus.project_name} | Connection: {ctmodbus.session}"
 
 
 @ctmodbus.command
