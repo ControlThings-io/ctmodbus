@@ -1,11 +1,12 @@
 [project]
 name = "ctmodbus"
-version = "0.6.0"
+version = "1.0.0rc1"
 description = "A highly flexible Modbus tool made for penetration testers"
 authors = [{ name = "Justin Searle", email = "justin@controlthings.io" }]
-requires-python = ">=3.8,<4"
+requires-python = ">=3.11,<4"
 readme = "README.md"
-license = "LGPL-3.0-or-later"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 keywords = ["Modbus", "test", "ICS", "control", "ControlThings"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -19,20 +20,17 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Topic :: Utilities",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "ctui>=0.8.0,<0.9",
+    "ctui==1.0.0rc1",
     "pyserial>=3.5,<4",
-    "pymodbus>=2.4.0,<3",
+    "pymodbus[serial]>=3.15.0,<3.16",
     "tabulate>=0.8.9,<0.9",
-    "psutil>=5.8.0,<6",
+    "psutil>=7,<8",
 ]
 
 [project.urls]
