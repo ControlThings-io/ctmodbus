@@ -2,6 +2,9 @@
 
 ## 1.0.0rc1 — unreleased
 
+- Add `connect tls` with verified server certificates, custom CA roots, optional
+  client identity, explicit insecure mode, and persisted TLS connection settings.
+
 - Migrate from ctui 0.x to ctui 1.0.0rc1 and require Python 3.11+.
 - Use native async PyModbus 3.15 clients for TCP, UDP, RTU, and ASCII.
 - Replace global runtime state with an application-owned connection lifecycle.

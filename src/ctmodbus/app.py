@@ -15,6 +15,13 @@ NETWORK_ARGUMENTS = {
     name: Argument(flags=(f"--{name}",))
     for name in ("port", "unit", "timeout", "retries")
 }
+TLS_ARGUMENTS = {
+    **NETWORK_ARGUMENTS,
+    **{
+        name: Argument(flags=(f"--{name.replace('_', '-')}",))
+        for name in ("ca_file", "cert_file", "key_file", "insecure")
+    },
+}
 SERIAL_ARGUMENTS = {
     name: Argument(flags=(f"--{name}",))
     for name in (
@@ -122,6 +129,7 @@ class ModbusApp(ModbusCommandMixin, CtuiApp):
             )
         opening = item.name in {
             "connect tcp",
+            "connect tls",
             "connect udp",
             "connect rtu",
             "connect ascii",
@@ -252,6 +260,35 @@ class ModbusApp(ModbusCommandMixin, CtuiApp):
         return await self.open_connection(
             ConnectionSettings(
                 "tcp", host, port=port, unit=unit, timeout=timeout, retries=retries
+            )
+        )
+
+    @command(name="connect tls", arguments=TLS_ARGUMENTS)
+    async def connect_tls(
+        self,
+        host: str,
+        port: int = 802,
+        unit: int = 1,
+        timeout: float = 3,
+        retries: int = 0,
+        ca_file: str | None = None,
+        cert_file: str | None = None,
+        key_file: str | None = None,
+        insecure: bool = False,
+    ):
+        """Open Modbus TLS; verify the server unless --insecure is specified."""
+        return await self.open_connection(
+            ConnectionSettings(
+                "tls",
+                host,
+                port=port,
+                unit=unit,
+                timeout=timeout,
+                retries=retries,
+                ca_file=ca_file,
+                cert_file=cert_file,
+                key_file=key_file,
+                insecure=insecure,
             )
         )
 

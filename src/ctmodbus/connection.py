@@ -1,7 +1,9 @@
 """Native async transports and serialized, cancellable connection ownership."""
 
 import asyncio
+import inspect
 import math
+import ssl
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from typing import Literal
@@ -11,11 +13,12 @@ from pymodbus import FramerType
 from pymodbus.client import (
     AsyncModbusSerialClient,
     AsyncModbusTcpClient,
+    AsyncModbusTlsClient,
     AsyncModbusUdpClient,
 )
 from pymodbus.exceptions import ModbusException
 
-Transport = Literal["tcp", "udp", "rtu", "ascii"]
+Transport = Literal["tcp", "udp", "tls", "rtu", "ascii"]
 
 
 @dataclass(frozen=True)
@@ -32,10 +35,14 @@ class ConnectionSettings:
     bytesize: int = 8
     parity: Literal["N", "E", "O"] = "N"
     stopbits: int = 1
+    ca_file: str | None = None
+    cert_file: str | None = None
+    key_file: str | None = None
+    insecure: bool = False
 
     def __post_init__(self):
-        if self.transport not in ("tcp", "udp", "rtu", "ascii"):
-            raise CommandError("Transport must be tcp, udp, rtu, or ascii")
+        if self.transport not in ("tcp", "udp", "tls", "rtu", "ascii"):
+            raise CommandError("Transport must be tcp, udp, tls, rtu, or ascii")
         if not isinstance(self.target, str) or not self.target.strip():
             raise CommandError("A host or serial device is required")
         for name, low, high in (
@@ -62,6 +69,19 @@ class ConnectionSettings:
         if self.parity not in ("N", "E", "O"):
             raise CommandError("parity must be N, E, or O")
 
+        for name in ("ca_file", "cert_file", "key_file"):
+            value = getattr(self, name)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise CommandError(f"{name} must be a nonempty file path")
+        if type(self.insecure) is not bool:
+            raise CommandError("insecure must be a boolean")
+        if self.key_file and not self.cert_file:
+            raise CommandError("key-file requires cert-file")
+        if self.transport != "tls" and any(
+            (self.ca_file, self.cert_file, self.key_file, self.insecure)
+        ):
+            raise CommandError("Certificate options require a TLS connection")
+
     def as_dict(self):
         """Return only JSON-compatible connection settings."""
         return asdict(self)
@@ -71,19 +91,37 @@ class ConnectionSettings:
         """Return an endpoint label shared by logs and the status bar."""
         target = (
             f"{self.target}:{self.port}"
-            if self.transport in ("tcp", "udp")
+            if self.transport in ("tcp", "udp", "tls")
             else self.target
         )
         return f"{self.transport.upper()} {target} unit {self.unit}"
 
 
-def create_client(settings):
+def tls_context(settings):
+    """Load trust roots and optional client identity off the event loop."""
+    context = ssl.create_default_context(cafile=settings.ca_file)
+    if settings.insecure:
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    if settings.cert_file:
+        # An explicit empty password prevents OpenSSL prompting on stdin for an
+        # encrypted key. Password-bearing credentials are not stored in profiles.
+        context.load_cert_chain(settings.cert_file, settings.key_file, password="")
+    return context
+
+
+async def create_client(settings):
     """Construct a client in the running event loop; disable implicit reconnects."""
     options = {
         "timeout": settings.timeout,
         "retries": settings.retries,
         "reconnect_delay": 0,
     }
+    if settings.transport == "tls":
+        context = await asyncio.to_thread(tls_context, settings)
+        return AsyncModbusTlsClient(
+            settings.target, port=settings.port, sslctx=context, **options
+        )
     if settings.transport == "tcp":
         return AsyncModbusTcpClient(settings.target, port=settings.port, **options)
     if settings.transport == "udp":
@@ -127,6 +165,8 @@ class Connection:
                 if self.client is not None:
                     raise CommandError("A session is already open; close it first")
                 client = self.client_factory(settings)
+                if inspect.isawaitable(client):
+                    client = await client
                 try:
                     async with asyncio.timeout(settings.timeout + 1):
                         if not await client.connect():

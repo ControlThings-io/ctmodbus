@@ -14,7 +14,7 @@ Commit milestones:
 
 Retain TCP/UDP/RTU/ASCII, discovery, identification, four read types, and
 coil/register writes. Repair existing multi-write and response-validation gaps.
-Defer TLS client, polling, tags, simulation, proxying, raw/fuzzy requests,
+Defer polling, tags, simulation, proxying, raw/fuzzy requests,
 tunneling, and historian integration.
 
 Release gates: command parity in TUI and CLI; nonblocking I/O; serialized
@@ -44,3 +44,11 @@ with distribution smoke tests required before publication. Those remote jobs
 have not been run from this workspace. Physical serial hardware and real
 terminal usability checks remain on RELEASE_CHECKLIST.md. No release was
 published and no tags were pushed.
+
+## TLS follow-up
+
+Added native async `connect tls` after the initial migration, with server
+verification, custom trust roots, optional client certificates, and profile
+persistence. TLS integration uses ephemeral OpenSSL certificates and covers
+verified reads/writes, mutual TLS, trust and hostname failures, and explicit
+insecure connections.

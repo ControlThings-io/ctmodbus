@@ -4,7 +4,7 @@ An asynchronous Modbus tool for device testing, built with
 [ctui](https://github.com/ControlThings-io/ctui) and
 [PyModbus](https://github.com/pymodbus-dev/pymodbus).
 
-The 1.0 release candidate supports TCP, UDP, serial RTU, and serial ASCII;
+The 1.0 release candidate supports TCP, UDP, TLS, serial RTU, and serial ASCII;
 device identification; coils, discrete inputs, input registers, and holding
 registers; and single/multiple coil and holding-register writes.
 
@@ -37,6 +37,7 @@ for the full list, including ctui's project, config, and history commands.
 connect                                           # suggest serial ports and local services
 connect tcp 10.10.10.1 --port 502 --unit 1
 connect udp 10.10.10.1 --port 10502
+connect tls plc.example.com --ca-file plant-ca.pem
 connect rtu /dev/ttyUSB0 --baudrate 9600 --parity E
 connect ascii COM2 --baudrate 9600
 read id
@@ -73,8 +74,17 @@ All connections accept `--unit` (1–247), `--timeout` (seconds), and `--retries
 (0–10). Defaults are unit 1, zero retries, and a timeout of 3 seconds for network
 connections or 1 second for serial connections. Serial defaults are 9600 baud,
 8 data bits, no parity, and 1 stop bit; override these with `--baudrate`,
-`--bytesize`, `--parity`, and `--stopbits`. Network ports default to 502; supply
+`--bytesize`, `--parity`, and `--stopbits`. TCP/UDP ports default to 502 and TLS to 802; supply
 host and port separately, including for IPv6 addresses.
+
+`connect tls HOST` uses Modbus TLS framing and verifies the server certificate
+against system trust roots and the supplied hostname. Use `--ca-file PATH` for
+a private CA and `--cert-file PATH --key-file PATH` for client authentication.
+A certificate file may contain its private key; otherwise supply `--key-file`.
+Keys must be unencrypted. Certificate loading runs off the event loop.
+`--insecure` explicitly disables server certificate and hostname verification.
+Profiles save these file paths and the verification setting, not certificate or
+private-key contents; the files must remain available when reconnecting.
 
 Device I/O is asynchronous, with requests serialized on the single connection.
 The status bar shows the project, transport state, and read progress. `cancel`
@@ -156,11 +166,13 @@ servers, and a terminal runtime with injected input/output. POSIX systems also
 exercise RTU/ASCII over bridged pseudo-terminals; Windows skips those PTY tests.
 For a local manual TCP fixture, run `uv run python tests/server.py tcp --port 5020`.
 The same fixture supports `udp`, `rtu`, and `ascii`; serial fixtures take
-`--target DEVICE`. Physical serial adapters still need hardware smoke testing.
+`--target DEVICE`. TLS integration tests use temporary certificates generated with `openssl` and
+are skipped if that executable is unavailable. Physical serial adapters still
+need hardware smoke testing.
 
 This is a breaking migration from 0.x. Legacy command spellings, space-separated
 multi-write values, host:port syntax, and old storage formats are not supported.
-Polling, tags, TLS client support, simulation, proxies, raw/fuzzy requests,
+Polling, tags, simulation, proxies, raw/fuzzy requests,
 tunneling, and historian integration remain deferred.
 
 See [CHANGELOG.md](CHANGELOG.md), [MIGRATION.md](MIGRATION.md), and
