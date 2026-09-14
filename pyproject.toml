@@ -51,7 +51,8 @@ build-backend = "uv_build"
 target-version = ["py311"]
 
 [tool.pylint.messages_control]
-disable = "C0330, C0326"
+# Typed CLI parameters and explicit settings naturally exceed these heuristics.
+disable = ["too-many-arguments", "too-many-positional-arguments", "too-many-instance-attributes", "too-many-locals", "unidiomatic-typecheck"]
 
 [tool.pylint.format]
 max-line-length = "88"

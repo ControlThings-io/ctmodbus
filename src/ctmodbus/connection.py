@@ -63,10 +63,12 @@ class ConnectionSettings:
             raise CommandError("parity must be N, E, or O")
 
     def as_dict(self):
+        """Return only JSON-compatible connection settings."""
         return asdict(self)
 
     @property
     def label(self):
+        """Return an endpoint label shared by logs and the status bar."""
         target = (
             f"{self.target}:{self.port}"
             if self.transport in ("tcp", "udp")
@@ -77,9 +79,11 @@ class ConnectionSettings:
 
 def create_client(settings):
     """Construct a client in the running event loop; disable implicit reconnects."""
-    options = dict(
-        timeout=settings.timeout, retries=settings.retries, reconnect_delay=0
-    )
+    options = {
+        "timeout": settings.timeout,
+        "retries": settings.retries,
+        "reconnect_delay": 0,
+    }
     if settings.transport == "tcp":
         return AsyncModbusTcpClient(settings.target, port=settings.port, **options)
     if settings.transport == "udp":
@@ -108,9 +112,11 @@ class Connection:
 
     @property
     def connected(self):
+        """Read actual transport status rather than assuming an open socket."""
         return self.client is not None and self.client.connected
 
     async def connect(self, settings):
+        """Create and open a client, discarding failed or cancelled attempts."""
         task = asyncio.current_task()
         generation = self.generation
         self.tasks.add(task)
@@ -138,6 +144,7 @@ class Connection:
 
     @asynccontextmanager
     async def operation(self):
+        """Reserve the current session for a complete command's requests."""
         client, generation = self.client, self.generation
         if client is None:
             raise CommandError("No open session; connect first")

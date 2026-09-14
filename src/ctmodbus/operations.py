@@ -38,6 +38,7 @@ def read_chunks(addresses, max_count, limit):
 
 
 def validate_write(kind, address, values):
+    """Reject invalid writes before issuing any protocol request."""
     limit = 1968 if kind == "coils" else 123
     maximum = 1 if kind == "coils" else 65535
     if not values or len(values) > limit:
@@ -48,13 +49,14 @@ def validate_write(kind, address, values):
         raise CommandError(f"{kind} values must be integers between 0 and {maximum}")
 
 
-class ModbusCommands:
+class ModbusCommandMixin:
     """Commands mixed into ModbusApp; connection and services belong to the app."""
 
     async def record_operation(self, direction, decoded):
         """Overridden by the application to persist decoded protocol records."""
 
     async def read_values(self, kind, addresses, max_count):
+        """Read ordered chunks and retain completed results on failure."""
         chunks = list(read_chunks(addresses, max_count, READ_LIMITS[kind]))
         results = []
         try:
@@ -72,6 +74,14 @@ class ModbusCommands:
                         address=span.start,
                         count=span.count,
                     )
+                    expected_function = {
+                        "coils": 1,
+                        "discrete_inputs": 2,
+                        "holding_registers": 3,
+                        "input_registers": 4,
+                    }[kind]
+                    if getattr(response, "function_code", None) != expected_function:
+                        raise CommandError("Read response has incorrect function")
                     attr = (
                         "bits" if kind in ("coils", "discrete_inputs") else "registers"
                     )
@@ -131,8 +141,12 @@ class ModbusCommands:
 
     @staticmethod
     def partial_read(kind, results, message):
+        """Include completed addresses in a failed read's error output."""
         if results:
-            return f"{message}\nPartial read: {len(results)} addresses completed\n{format_values(kind, results)}"
+            return (
+                f"{message}\nPartial read: {len(results)} addresses completed\n"
+                f"{format_values(kind, results)}"
+            )
         return message
 
     @command(name="read coils", arguments=READ_ARGUMENTS)
@@ -183,6 +197,13 @@ class ModbusCommands:
                     page = getattr(response, "information", None)
                     if not isinstance(page, dict) or not page:
                         raise CommandError("Device returned no identification objects")
+                    if any(
+                        type(key) is not int
+                        or not 0 <= key <= 255
+                        or not isinstance(value, (bytes, str))
+                        for key, value in page.items()
+                    ):
+                        raise CommandError("Invalid device identification objects")
                     information.update(page)
                     await self.record_operation(
                         "received",
@@ -214,6 +235,7 @@ class ModbusCommands:
         )
 
     async def write_values(self, kind, address, values):
+        """Issue one write and verify the returned function, address and values."""
         validate_write(kind, address, values)
         multiple = len(values) > 1
         suffix = "coils" if kind == "coils" else "registers"
@@ -240,17 +262,19 @@ class ModbusCommands:
                     else (16 if multiple else 6)
                 )
                 if (
-                    response.function_code != expected_function
-                    or response.address != address
+                    getattr(response, "function_code", None) != expected_function
+                    or getattr(response, "address", None) != address
                 ):
                     raise CommandError(
                         "Write acknowledgement has incorrect function or address"
                     )
                 if multiple:
-                    if response.count != len(values):
+                    if getattr(response, "count", None) != len(values):
                         raise CommandError("Write acknowledgement has incorrect count")
                 else:
-                    echoed = response.bits if kind == "coils" else response.registers
+                    echoed = getattr(
+                        response, "bits" if kind == "coils" else "registers", None
+                    )
                     if echoed != wire_values:
                         raise CommandError("Write acknowledgement has incorrect value")
                 await self.record_operation(
@@ -270,7 +294,8 @@ class ModbusCommands:
             await self.record_operation("error", {**request, "error": message})
             raise CommandError(message) from error
         return CommandResult.append(
-            f"{timestamp()} Write acknowledged: {kind}\n{format_values(kind, list(enumerate(values, address)))}"
+            f"{timestamp()} Write acknowledged: {kind}\n"
+            f"{format_values(kind, list(enumerate(values, address)))}"
         )
 
     @command(name="write coils")

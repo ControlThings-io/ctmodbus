@@ -9,7 +9,7 @@ from ctui import Argument, CommandError, CommandResult, CtuiApp, command
 
 from ctmodbus.connection import Connection, ConnectionSettings, create_client
 from ctmodbus.discovery import complete_serial, suggestions
-from ctmodbus.operations import ModbusCommands
+from ctmodbus.operations import ModbusCommandMixin
 
 NETWORK_ARGUMENTS = {
     name: Argument(flags=(f"--{name}",))
@@ -31,10 +31,11 @@ SERIAL_ARGUMENTS["device"] = Argument(completer=complete_serial)
 
 
 async def complete_profiles(context):
+    """Complete saved profile names from the active project."""
     return list(await context.app.configs.list())
 
 
-class ModbusApp(ModbusCommands, CtuiApp):
+class ModbusApp(ModbusCommandMixin, CtuiApp):
     """A Modbus client with one connection and project-scoped services."""
 
     name = "ctmodbus"
@@ -50,6 +51,7 @@ class ModbusApp(ModbusCommands, CtuiApp):
         self._device_dispatches = set()
         self._project_changing = False
         self._closing = False
+        self._opening = False
         self._stopping = False
         self._close_lock = asyncio.Lock()
         self._record_session = None
@@ -64,9 +66,11 @@ class ModbusApp(ModbusCommands, CtuiApp):
         )
 
     def connection_status(self):
+        """Describe project, transport state, and active read progress."""
         settings = self.connection.settings
         state = (
-            f"{settings.label} ({'connected' if self.connection.connected else 'disconnected'})"
+            f"{settings.label} "
+            f"({'connected' if self.connection.connected else 'disconnected'})"
             if settings
             else "Disconnected"
         )
@@ -78,11 +82,12 @@ class ModbusApp(ModbusCommands, CtuiApp):
         return f"Project: {project} | {state}{self._progress}"
 
     def update_progress(self, completed, total):
+        """Refresh the TUI footer without affecting CLI output."""
         self._progress = f" | Read {completed}/{total}" if total else ""
         if hasattr(self, "app"):
             self.app.invalidate()
 
-    async def dispatch(self, text, **kwargs):
+    async def dispatch(self, text, **kwargs):  # pylint: disable=too-many-branches
         # Reserve project transitions before the first await. This also covers
         # unique command prefixes, which are resolved to their canonical names.
         item, _ = self.commands.resolve(text)
@@ -107,15 +112,28 @@ class ModbusApp(ModbusCommands, CtuiApp):
                 or self._closing
             ):
                 raise CommandError(
-                    "Close the connection and finish device work before changing or resetting projects"
+                    "Close the connection and finish device work "
+                    "before changing or resetting projects"
                 )
             self._project_changing = True
         elif self._project_changing:
             raise CommandError(
                 "A project transition is in progress; retry when it finishes"
             )
+        opening = item.name in {
+            "connect tcp",
+            "connect udp",
+            "connect rtu",
+            "connect ascii",
+            "profile connect",
+        }
         if device_command:
+            if self._opening:
+                raise CommandError("Connection is opening; retry when it finishes")
+            if opening:
+                self._opening = True
             if self._closing:
+                self._opening = False
                 raise CommandError("Connection is closing; retry when it finishes")
             self._device_dispatches.add(task)
         try:
@@ -131,11 +149,20 @@ class ModbusApp(ModbusCommands, CtuiApp):
             return result
         except asyncio.CancelledError as error:
             raise CommandError("Command cancelled before completion") from error
+        except CommandError as error:
+            warnings = self._record_warnings.get(task)
+            if warnings:
+                raise CommandError(
+                    f"{error}\nRecording warning: " + "; ".join(dict.fromkeys(warnings))
+                ) from error
+            raise
         finally:
             if project_change:
                 self._project_changing = False
             if device_command:
                 self._device_dispatches.discard(task)
+            if opening:
+                self._opening = False
             self._record_warnings.pop(task, None)
 
     async def record_operation(self, direction, decoded):
@@ -148,7 +175,7 @@ class ModbusApp(ModbusCommands, CtuiApp):
                 session=self._record_session,
                 decoded=decoded,
             )
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             # A storage failure must not convert an acknowledged write into a
             # reported protocol failure, nor cause the caller to retry a write.
             self._record_warnings.setdefault(asyncio.current_task(), []).append(
@@ -156,25 +183,35 @@ class ModbusApp(ModbusCommands, CtuiApp):
             )
 
     async def finish_record_session(self):
+        """End recording before switching connections or closing project storage."""
         session, self._record_session = self._record_session, None
         end_session = getattr(self.records, "end_session", None)
         if session is not None and end_session is not None:
             await end_session(session)
 
     async def close_connection(self):
+        """Drain device commands before transport and record-session cleanup."""
         async with self._close_lock:
             self._closing = True
             try:
                 pending = self._device_dispatches - {asyncio.current_task()}
                 for task in pending:
                     task.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
-                await self.connection.close()
-                await self.finish_record_session()
+                try:
+                    if pending:
+                        await asyncio.wait_for(
+                            asyncio.gather(*pending, return_exceptions=True), timeout=5
+                        )
+                finally:
+                    self.connection.abort()
+                    await self.finish_record_session()
             finally:
                 self._closing = False
                 self.update_progress(0, 0)
+
+    async def on_start(self):
+        """Allow a fresh runtime to use this application instance."""
+        self._stopping = False
 
     async def on_stop(self):
         self._stopping = True
@@ -186,6 +223,7 @@ class ModbusApp(ModbusCommands, CtuiApp):
         return await asyncio.to_thread(suggestions)
 
     async def open_connection(self, settings):
+        """Open a transport and its project recording session together."""
         await self.connection.connect(settings)
         try:
             await self.finish_record_session()

@@ -7,6 +7,7 @@ from tabulate import tabulate
 
 
 def timestamp():
+    """Return an unambiguous UTC timestamp for protocol output."""
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
@@ -38,6 +39,7 @@ def format_values(kind, values):
 
 
 def format_identification(information):
+    """Label sparse device objects and escape terminal control characters."""
     names = (
         "VendorName",
         "ProductCode",

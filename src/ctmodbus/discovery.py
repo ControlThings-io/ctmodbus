@@ -8,15 +8,17 @@ from tabulate import tabulate
 
 
 def serial_devices():
+    """Enumerate ports in a stable display order."""
     return sorted(comports(), key=lambda item: item.device)
 
 
-async def complete_serial(context):
+async def complete_serial(_context):
     """ctui async completion provider; discovery is advisory, not a restriction."""
     return [item.device for item in await asyncio.to_thread(serial_devices)]
 
 
 def suggestions():
+    """Format local devices and best-effort process inspection."""
     devices = [
         [item.device, item.manufacturer or "", item.product or ""]
         for item in serial_devices()
