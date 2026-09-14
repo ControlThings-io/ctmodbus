@@ -2,7 +2,6 @@
 .mypy_cache/
 *.pyc
 __pycache__/
-src/ctserial/__pycache__/
 dist/
 ctmodbus.egg-info/
 .venv/

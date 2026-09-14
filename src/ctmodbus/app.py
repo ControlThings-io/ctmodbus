@@ -137,6 +137,10 @@ class ModbusApp(ModbusCommandMixin, CtuiApp):
                 raise CommandError("Connection is closing; retry when it finishes")
             self._device_dispatches.add(task)
         try:
+            if project_change:
+                # External task cancellation can leave an ended transport's
+                # recording session open; finish it in its original project.
+                await self.finish_record_session()
             result = await super().dispatch(text, **kwargs)
             warnings = self._record_warnings.get(task)
             if warnings:

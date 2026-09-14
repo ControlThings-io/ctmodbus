@@ -9,7 +9,13 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+[ab][0-9]+"
 
 jobs:
+  checks:
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,12 +32,6 @@ jobs:
 
       - name: Build
         run: uv build
-
-      # # Optional, but recommended: run smoke tests on distributions
-      # - name: Smoke test (wheel)
-      #   run: uv run --isolated --no-project --with dist/*.whl tests/smoke_test.py
-      # - name: Smoke test (source distribution)
-      #   run: uv run --isolated --no-project --with dist/*.tar.gz tests/smoke_test.py
 
       - name: Upload distributions as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

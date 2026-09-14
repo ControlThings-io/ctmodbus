@@ -385,6 +385,18 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(status, 2)
             self.assertFalse(self.client.connected)
 
+    async def test_external_cancellation_then_project_change(self):
+        await self.connect()
+        self.client.gate = asyncio.Event()
+        task = asyncio.create_task(self.app.dispatch("read coils 0"))
+        await self.client.started.wait()
+        task.cancel()
+        with self.assertRaises(CommandError):
+            await task
+        await self.app.dispatch("project create after-external-cancel")
+        self.assertIsNone(self.app._record_session)
+        self.assertEqual(await self.app.records.query(), [])
+
     async def test_invalid_profile(self):
         await self.app.configs.save(
             "bad", {"transport": "tcp", "target": "localhost", "timeout": "oops"}
