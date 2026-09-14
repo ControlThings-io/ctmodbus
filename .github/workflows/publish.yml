@@ -3,19 +3,82 @@ name: "Publish release to PyPI"
 on:
   push:
     tags:
-      # Publish on version tags, e.g. v0.1.0
+      # Publish on version tags, e.g. v1.0.0
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+[ab][0-9]+"
 
 jobs:
-  checks:
-    uses: ./.github/workflows/test.yml
+  release-metadata:
+    name: Validate release metadata
+    runs-on: ubuntu-latest
     permissions:
       contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          package_version="$(python3 - <<'PY'
+          import tomllib
+
+          with open("pyproject.toml", "rb") as project_file:
+              print(tomllib.load(project_file)["project"]["version"])
+          PY
+          )"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          if [[ "$tag_version" != "$package_version" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match package version $package_version" >&2
+            exit 1
+          fi
+
+  verify:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs:
+      - release-metadata
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - windows-latest
+          - macos-latest
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: false
+
+      - name: Install dependencies
+        run: uv sync --locked --python ${{ matrix.python-version }}
+
+      - name: Run tests
+        run: >-
+          uv run --python ${{ matrix.python-version }}
+          python -m unittest discover -s tests -v
 
   build:
-    needs: checks
+    needs:
+      - verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,14 +93,33 @@ jobs:
         with:
           enable-cache: false
 
+      - name: Install dependencies
+        run: uv sync --locked --python 3.11
+
+      - name: Check formatting
+        run: uv run --python 3.11 black --check src tests
+
+      - name: Check import order
+        run: uv run --python 3.11 isort --check-only src tests
+
+      - name: Lint
+        run: uv run --python 3.11 pylint src/ctmodbus
+
       - name: Build
         run: uv build
+
+      - name: Smoke test wheel
+        run: uv run --isolated --no-project --with dist/*.whl tests/smoke_test.py
+
+      - name: Smoke test source distribution
+        run: uv run --isolated --no-project --with dist/*.tar.gz tests/smoke_test.py
 
       - name: Upload distributions as artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
 
   publish:
     needs:
@@ -49,6 +131,11 @@ jobs:
       contents: write
       id-token: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Install uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
@@ -60,6 +147,54 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Prepare curated release notes
+        env:
+          TAG_VERSION: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag_version = os.environ["TAG_VERSION"].removeprefix("v")
+          base_version = re.sub(r"(?:a|b|rc)\d+$", "", tag_version)
+          candidates = [tag_version]
+          if base_version != tag_version:
+              candidates.append(base_version)
+
+          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          start = None
+          for candidate in candidates:
+              prefix = f"## [{candidate}]"
+              start = next(
+                  (index + 1 for index, line in enumerate(lines)
+                   if line.startswith(prefix)),
+                  None,
+              )
+              if start is not None:
+                  break
+
+          if start is None:
+              raise SystemExit(
+                  f"CHANGELOG.md has no section for {tag_version} or {base_version}"
+              )
+
+          end = next(
+              (index for index in range(start, len(lines))
+               if lines[index].startswith("## [")),
+              len(lines),
+          )
+          notes = "\n".join(lines[start:end]).strip()
+          if base_version != tag_version:
+              notice = (
+                  f"> **Prerelease:** {tag_version} is a release candidate for "
+                  f"ctmodbus {base_version}. Test it before using it in production."
+              )
+              notes = f"{notice}\n\n{notes}"
+
+          Path("release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          PY
+
       - name: Generate PEP 740 attestations
         uses: astral-sh/attest-action@f589a42a7efb6fe400b4f400de60b4bc90390027 # v0.0.6
 
@@ -70,8 +205,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          release_options=()
+          if [[ "$GITHUB_REF_NAME" =~ (a|b|rc)[0-9]+$ ]]; then
+            release_options+=(--prerelease --latest=false)
+          fi
+
+          gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
+            --notes-file release-notes.md \
+            "${release_options[@]}" \
             --title "$GITHUB_REF_NAME"

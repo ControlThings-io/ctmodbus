@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0rc1 — unreleased
+## [1.0.0rc1] - Unreleased
 
 - Add `connect tls` with verified server certificates, custom CA roots, optional
   client identity, explicit insecure mode, and persisted TLS connection settings.

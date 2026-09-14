@@ -52,3 +52,14 @@ verification, custom trust roots, optional client certificates, and profile
 persistence. TLS integration uses ephemeral OpenSSL certificates and covers
 verified reads/writes, mutual TLS, trust and hostname failures, and explicit
 insecure connections.
+
+## Workflow alignment with ctui
+
+The test and publish workflows now follow ctui's workflow structure: Python
+3.11–3.14 on Linux x86-64/ARM64, Windows, and macOS; dedicated quality checks;
+post-test builds and installed-distribution checks; and artifact uploads.
+Publication validates tag/package versions, extracts curated changelog notes,
+attests and publishes the tested artifacts, and attaches them to GitHub releases.
+Alpha, beta, and release-candidate tags are marked prerelease and never latest.
+ctmodbus retains its pylint check; formatting targets omit ctui's examples
+folder, and release notes/artifact labels use the ctmodbus name.
