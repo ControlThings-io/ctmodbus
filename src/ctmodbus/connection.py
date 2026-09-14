@@ -166,6 +166,13 @@ class Connection:
                 self.client.close()
             self.client = self.settings = None
 
+    def abort(self):
+        """Discard the transport after interrupted I/O and reject queued work."""
+        self.generation += 1
+        if self.client is not None:
+            self.client.close()
+        self.client = self.settings = None
+
     async def request(self, method, **kwargs):
         """Bound each request even if a transport stops responding."""
         settings = self.settings

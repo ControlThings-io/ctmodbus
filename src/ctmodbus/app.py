@@ -8,6 +8,7 @@ from ctui import Argument, CommandResult, CtuiApp, command
 
 from ctmodbus.connection import Connection, ConnectionSettings, create_client
 from ctmodbus.discovery import complete_serial, suggestions
+from ctmodbus.operations import ModbusCommands
 
 NETWORK_ARGUMENTS = {
     name: Argument(flags=(f"--{name}",))
@@ -28,7 +29,7 @@ SERIAL_ARGUMENTS = {
 SERIAL_ARGUMENTS["device"] = Argument(completer=complete_serial)
 
 
-class ModbusApp(CtuiApp):
+class ModbusApp(ModbusCommands, CtuiApp):
     """A Modbus client with one connection and project-scoped services."""
 
     name = "ctmodbus"

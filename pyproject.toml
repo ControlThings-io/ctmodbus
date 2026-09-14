@@ -47,6 +47,9 @@ dev = ["pylint", "black", "isort"]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
 
+[tool.black]
+target-version = ["py311"]
+
 [tool.pylint.messages_control]
 disable = "C0330, C0326"
 
