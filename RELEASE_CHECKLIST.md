@@ -1,5 +1,7 @@
 # Release checklist
 
+Target release tag: `v1.0.0rc1`. Python package version: `1.0.0rc1`.
+
 ## Automated gates
 
 - [ ] `uv lock --check`
