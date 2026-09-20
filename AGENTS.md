@@ -1,43 +1,15 @@
-# Repository instructions
+# ctmodbus instructions
 
-## Project continuity
+## Project context
 
-- Before working, read [docs/STATUS.md](docs/STATUS.md) and
-  [docs/DECISIONS.md](docs/DECISIONS.md), then inspect the current branch,
-  working tree, and recent commits. Reconcile stale notes with the code and
-  the user's latest instructions.
-- After meaningful work, update status with completed changes, checks actually
-  run, remaining tasks, blockers, and concrete next steps. Include memory
-  updates with the corresponding code changes.
-- Record significant accepted decisions and rationale in the decision log.
-  Label proposals, inferred rationale, and superseded decisions explicitly;
-  do not turn assistant suggestions into user commitments.
-- Keep status concise and use Git history for detailed changes. Link existing
-  documentation rather than duplicating it. Use repository-relative paths;
-  do not commit private transcripts, credentials, or machine-specific logs.
-- Date validation evidence and identify its revision. Never infer publication
-  or remote CI success from local tests or historical session summaries.
-- Before a laptop handoff, record unfinished work and remaining validation.
-  Code and notes must be committed and pushed to transfer through Git; pull
-  the same branch on the receiving laptop before starting a new session.
-  These files carry context, not automatic chat-history synchronization.
+Read [docs/STATUS.md](docs/STATUS.md) for current work and validation gaps.
+Read [docs/DECISIONS.md](docs/DECISIONS.md) headings and entries relevant to the
+task; review D01–D08 together for cross-cutting architecture changes. Update
+these files alongside meaningful changes using the global continuity guidance.
 
-## Development preferences
-
-- Use Conventional Commits: a suitable prefix such as `feat:`, `fix:`,
-  `docs:`, `build:`, `test:`, or `ci:` and a concise description.
-- Follow applicable official Python standards and PEPs, including packaging
-  and versioning. Prefer official Python and PyPA documentation as references.
-- Follow GitHub-recommended and sound development practices proportionately:
-  clear commits and reviews, appropriate tests and CI, maintainable code,
-  secure defaults, managed dependencies, and documented release procedures.
-- Keep Python code and examples simple and approachable. Prefer typed public
-  framework APIs and shared implementations over duplicated command paths.
-- Use uv and the checked-in lockfile. Python 3.11 is the baseline; CI defines
-  Python 3.11–3.14 on Linux x86-64/ARM64, Windows, and macOS.
-- Update README examples when public behavior changes. The deliberate 0.x
-  compatibility break is migration scope, not blanket permission for future
-  undocumented breaking changes.
+Use uv and the checked-in lockfile. Python 3.11 is the baseline; CI covers
+Python 3.11–3.14 on Linux x86-64/ARM64, Windows, and macOS.
+The 0.x compatibility waiver applies only to the migration (D01).
 
 ## Project constraints
 
@@ -66,9 +38,7 @@ git diff --check
 uv build
 ```
 
-Run checks appropriate to the change. Documentation-only work ordinarily needs
-content, link, and whitespace review. Runtime changes need relevant regression
-tests; packaging/release changes also need isolated wheel/sdist smoke tests via
+Packaging/release changes also need isolated wheel/sdist smoke tests via
 `tests/smoke_test.py`. Follow [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 POSIX PTYs cover serial framing; physical adapters still require manual checks.
 TLS integration requires OpenSSL and otherwise skips. Record skipped checks.
@@ -87,7 +57,3 @@ Publishing requires release approval; pushing a version tag triggers publication
 - `.github/workflows/`: platform tests and tag-triggered publishing.
 - [MIGRATION.md](MIGRATION.md), [CHANGELOG.md](CHANGELOG.md), and the release
   checklist describe migration scope, user-facing changes, and release gates.
-
-Preferences were adapted from the owner's
-[ctui instructions](https://github.com/ControlThings-io/ctui/blob/main/AGENTS.md)
-and its status/decision files on 2026-09-18, plus direct ctmodbus instructions.

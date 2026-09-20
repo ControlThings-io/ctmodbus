@@ -1,10 +1,10 @@
 # Project decisions
 
-Recorded 2026-09-18 from the evidence described in [STATUS.md](STATUS.md).
-Dates below refer to the original discussion/implementation. “Accepted” means
-explicit owner direction or the migration plan they authorized; “Implemented
-policy” records the chosen behavior without claiming the owner specified every
-detail. New ideas remain proposals until accepted.
+Recorded 2026-09-18 from the September 13 migration discussion, authorized plan,
+and implementation history through `426048a`; owner clarifications date from
+September 18. Dates below identify original decisions. “Accepted” means owner
+direction or an authorized plan; “Implemented policy” does not imply the owner
+specified every detail. Read entries relevant to the task, using their headings.
 
 ## D01 — Migrate the existing feature set without 0.x compatibility
 
@@ -134,28 +134,26 @@ Owner update, 2026-09-18: ctmodbus RC1 is not published; feature development is
 still ongoing. Release validation follows that work. The specific remaining
 features have not been listed, so do not invent commitments from deferred ideas.
 
-## D09 — Durable development preferences and commit history
+## D09 — Migration commit history
 
-Accepted, 2026-09-13; reaffirmed by ctui memory reviewed 2026-09-18.
+Accepted, 2026-09-13.
 
-The owner requested Conventional Commits for all projects and official Python/
-packaging standards plus recommended GitHub and general development practices.
-Keep changes reviewable, tests proportionate, dependencies managed, and releases
-documented. Transferable ctui preferences also favor simple approachable Python,
-shared typed command paths, and truthful evidence-based AI handoffs.
+The owner authorized rewording this branch's migration commits to Conventional
+Commits. The hashes above identify the resulting history;
+`backup/pre-conventional-commits-504ffa6` preserves the earlier seven commits.
+This is not unfinished implementation or standing authorization to rewrite
+future shared history. General commit preferences live in global instructions.
 
-The owner authorized rewording this branch's migration commits. Current hashes
-in STATUS are authoritative; `backup/pre-conventional-commits-504ffa6` preserves
-the earlier seven commits. Do not count that backup as unfinished implementation
-or infer standing authorization to rewrite future shared history.
+## D10 — Project memory and instruction scope
 
-## D10 — Git-tracked cross-laptop memory
+Accepted, 2026-09-18; scope refined by owner request, 2026-09-20.
 
-Accepted, 2026-09-18.
+Keep project constraints and context locations in AGENTS.md, current work and
+validation gaps in STATUS.md, and durable project rationale here. Track these
+files with the branch for laptop continuity. Personal development preferences
+belong in `~/.codex/AGENTS.md` and need separate synchronization between machines.
 
-Maintain AGENTS.md for stable instructions, STATUS.md for current work and next
-steps, and DECISIONS.md for durable rationale. Update them alongside meaningful
-work and transfer them with the branch. Record source limitations, unanswered
-questions, and historical validation dates. Keep private transcripts out of Git.
-Project-neutral preferences were extracted from all three ctui memory files;
-ctui-specific features and release plans are not automatically ctmodbus tasks.
+Keep STATUS focused on actionable state; Git preserves completed milestones and
+prior evidence reviews. Read relevant decisions on demand rather than requiring
+the entire log for every task. Retain technical boundaries and rationale so
+context savings do not depend on rediscovering correctness constraints.
