@@ -127,7 +127,9 @@ Byte and word order do not apply to Boolean tags.
 coils and holding registers. Overlapping tags are allowed and reported when
 created because alternate interpretations can be useful. Tagged operations
 retain normal response validation, recording, cancellation, and uncertain-write
-reporting.
+reporting. Multi-tag reads currently issue one request per tag; if a later tag
+fails, earlier values remain in operation records but are not included in the
+failed command's output.
 
 `read tags` without names reads every tag in name order. Supply a comma-separated
 list to read only those tags while preserving the requested order and duplicates.
@@ -136,6 +138,12 @@ Tag files are versioned TOML. Export appends `.toml` when absent and replaces
 the destination atomically. Import validates the whole file before changing the
 project. Existing names trigger a TUI confirmation; CLI and command-file use
 report the conflicting names and require `--replace`.
+
+Tag imports and exports currently assume sequential use. See the
+[documented concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
+before embedding concurrent tag-management or project-switching commands.
+
+## Connection options and operation results
 
 All connections accept `--unit` (1–247), `--timeout` (seconds), and `--retries`
 (0–10). Defaults are unit 1, zero retries, and a timeout of 3 seconds for network
@@ -242,8 +250,12 @@ multi-write values, host:port syntax, and old storage formats are not supported.
 Polling, simulation, proxies, raw/fuzzy requests,
 tunneling, and historian integration remain deferred.
 
-See [CHANGELOG.md](CHANGELOG.md), [MIGRATION.md](MIGRATION.md), and
-[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for scope and release gates.
+See [MIGRATION.md](MIGRATION.md) for the 0.x transition and
+[CHANGELOG.md](CHANGELOG.md) for release-facing changes. Current work and
+validation gaps are in [docs/STATUS.md](docs/STATUS.md), architecture and rationale
+in [docs/DECISIONS.md](docs/DECISIONS.md), and publication procedures in
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Local implementation contracts live
+in module, class, and callable docstrings.
 
 ## License
 

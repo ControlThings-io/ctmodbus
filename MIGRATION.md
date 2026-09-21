@@ -1,65 +1,25 @@
-# ctmodbus 1.0 migration
+# Migrating from ctmodbus 0.x
 
-Target: ctui 1.0.0rc1, Python 3.11+, native async PyModbus.
-No compatibility layer for pre-1.0 commands or storage.
+The 1.0 migration deliberately breaks compatibility with 0.x commands and
+storage. The dependency baseline and architectural rationale are in
+[docs/DECISIONS.md](docs/DECISIONS.md).
 
-Commit milestones:
+Use [README.md](README.md) for installation, command syntax, connection
+defaults, profiles, and tags. In particular:
 
-1. Packaging and application foundation.
-2. Async connection lifecycle and discovery.
-3. Typed commands, range reads, and acknowledged writes.
-4. Project profiles, records, progress, and cancellation.
-5. Automated regression and transport integration coverage.
-6. Documentation, CI, distribution validation, and release checklist.
+- Supply host and port separately; use `--port` instead of `host:port` syntax.
+- Use plural table names for raw reads/writes, inclusive read ranges, and
+  comma-separated write values. `tag create` uses singular table names.
+- Close the active connection before opening another or switching projects.
+- Use project-scoped profiles and decoded records; old storage has no
+  compatibility layer. The former `debug eval` command is removed.
 
-Retain TCP/UDP/RTU/ASCII, discovery, identification, four read types, and
-coil/register writes. Repair existing multi-write and response-validation gaps.
-Defer polling, tags, simulation, proxying, raw/fuzzy requests,
-tunneling, and historian integration.
+TLS and typed tags were added after the initial six migration milestones;
+their original deferral is superseded by D07 and D11 in the decision log.
+[CHANGELOG.md](CHANGELOG.md) records user-facing additions. Git history retains
+the completed milestone sequence.
 
-Release gates: command parity in TUI and CLI; nonblocking I/O; serialized
-connection operations; bounded shutdown; project isolation; regression and
-local transport tests; installed wheel/sdist smoke tests. Serial hardware and
-interactive terminal checks must be recorded separately from automation.
-
-## Implemented
-
-All six milestones are implemented. The package remains at 1.0.0rc1 with
-ctui==1.0.0rc1 and pymodbus[serial]>=3.15.0,<3.16 (locked to 3.15.0).
-The new README documents the breaking command syntax and connection defaults.
-
-Local validation completed on Linux:
-
-- 34 automated tests passed on Python 3.11 and Python 3.14.
-- Actual TCP/UDP and bridged-PTY RTU/ASCII exchanges passed.
-- Injected-terminal TUI and sequential CLI/command-file execution passed.
-- Cancellation, write uncertainty, project isolation, and recording failures
-  have regression coverage.
-- Black, isort, pylint, and lockfile validation passed.
-- Wheel and source distribution built; both passed isolated installation,
-  entry-point help, and project/config smoke checks.
-
-The GitHub workflow defines Python 3.11–3.14 checks on Linux, macOS, and Windows,
-with distribution smoke tests required before publication. Those remote jobs
-have not been run from this workspace. Physical serial hardware and real
-terminal usability checks remain on RELEASE_CHECKLIST.md. No release was
-published and no tags were pushed.
-
-## TLS follow-up
-
-Added native async `connect tls` after the initial migration, with server
-verification, custom trust roots, optional client certificates, and profile
-persistence. TLS integration uses ephemeral OpenSSL certificates and covers
-verified reads/writes, mutual TLS, trust and hostname failures, and explicit
-insecure connections.
-
-## Workflow alignment with ctui
-
-The test and publish workflows now follow ctui's workflow structure: Python
-3.11–3.14 on Linux x86-64/ARM64, Windows, and macOS; dedicated quality checks;
-post-test builds and installed-distribution checks; and artifact uploads.
-Publication validates tag/package versions, extracts curated changelog notes,
-attests and publishes the tested artifacts, and attaches them to GitHub releases.
-Alpha, beta, and release-candidate tags are marked prerelease and never latest.
-ctmodbus retains its pylint check; formatting targets omit ctui's examples
-folder, and release notes/artifact labels use the ctmodbus name.
+Current work and dated validation evidence belong in
+[docs/STATUS.md](docs/STATUS.md). Follow
+[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for release procedures; historical
+local results do not establish current release readiness or publication.

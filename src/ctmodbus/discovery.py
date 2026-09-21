@@ -1,4 +1,8 @@
-"""Local connection suggestions, performed off the event loop."""
+"""Advisory local connection discovery and serial completion metadata.
+
+Enumeration and process inspection are blocking. Async callers offload these
+functions; discovered endpoints are suggestions, never an input allowlist.
+"""
 
 import asyncio
 
@@ -9,12 +13,21 @@ from tabulate import tabulate
 
 
 def serial_devices():
-    """Enumerate ports in a stable display order."""
+    """Return pyserial port objects sorted by device path; OS errors propagate.
+
+    Manufacturer/product metadata may be absent for non-USB or unsupported ports.
+    This synchronous enumeration belongs on a worker thread for async callers.
+    """
     return sorted(comports(), key=lambda item: item.device)
 
 
 async def complete_serial(_context):
-    """ctui async completion provider; discovery is advisory, not a restriction."""
+    """Return ctui CompletionItems after offloading port enumeration.
+
+    Ignore the completion context. Insert only the device path; show available
+    manufacturer/product as help, or a differing port description as fallback.
+    Return an empty list when no ports exist; enumeration errors propagate.
+    """
     results = []
     for item in await asyncio.to_thread(serial_devices):
         details = [value for value in (item.manufacturer, item.product) if value]
@@ -25,7 +38,12 @@ async def complete_serial(_context):
 
 
 def suggestions():
-    """Format local devices and best-effort process inspection."""
+    """Return serial-device and local-listener tables as plain text.
+
+    Synchronous enumeration errors propagate. Process/network inspection is
+    best effort: inaccessible process names become unavailable and global
+    inspection errors become a diagnostic section rather than failing discovery.
+    """
     devices = [
         [item.device, item.manufacturer or "", item.product or ""]
         for item in serial_devices()

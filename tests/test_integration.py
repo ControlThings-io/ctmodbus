@@ -12,7 +12,14 @@ from ctmodbus.app import ModbusApp
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):
+    """Exercise real local transports; PTY serial cases require POSIX.
+
+    Fixtures clean up servers, projects, and descriptors. PTYs check framing,
+    not physical adapter timing or RS-485 driver behavior.
+    """
+
     async def exercise(self, app):
+        """Assert reads, writes, identification, and invalid-address errors on an open app."""
         for text in (
             "read coils 0-9",
             "read discrete_inputs 0-9",
@@ -34,6 +41,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             await app.dispatch("read holding_registers 1000")
 
     async def run_network(self, transport):
+        """Serve TCP/UDP on an ephemeral loopback port and always close both endpoints."""
         server = make_server(transport)
         await server.serve_forever(background=True)
         if transport == "tcp":
@@ -56,14 +64,17 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             await server.shutdown()
 
     async def test_tcp(self):
+        """Exercise actual Modbus TCP requests against the local fixture."""
         await self.run_network("tcp")
 
     async def test_udp(self):
+        """Exercise actual Modbus UDP requests against the local fixture."""
         await self.run_network("udp")
 
     async def run_serial(self, transport):
         # Two PTYs bridged at their masters exercise the real serial clients and
         # server, including their framing, without requiring attached hardware.
+        """Bridge two raw PTYs for RTU/ASCII checks and close readers/descriptors on exit."""
         import tty
 
         master1, slave1 = os.openpty()
@@ -75,6 +86,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             os.set_blocking(fd, False)
 
         def forward(source, destination):
+            """Relay available bytes between PTY masters; ignore temporary would-block errors."""
             try:
                 data = os.read(source, 65536)
                 if data:
@@ -107,8 +119,10 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipUnless(os.name == "posix", "PTY serial tests require POSIX")
     async def test_rtu(self):
+        """Verify RTU framing over POSIX PTYs without physical hardware."""
         await self.run_serial("rtu")
 
     @unittest.skipUnless(os.name == "posix", "PTY serial tests require POSIX")
     async def test_ascii(self):
+        """Verify ASCII framing over POSIX PTYs without physical hardware."""
         await self.run_serial("ascii")

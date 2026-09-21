@@ -21,8 +21,8 @@
   command, transport, persistence, cancellation, and terminal tests.
 - Consolidate packaging and align license metadata with the GPL-3.0-or-later source.
 
-Breaking changes: no pre-1.0 API, command, or storage compatibility. Commands use
-plural snake_case data names, comma-separated write values, and separate host
+Breaking changes: no pre-1.0 API, command, or storage compatibility. Raw reads
+and writes use plural snake_case names, comma-separated values, and separate host
 and `--port` arguments. Read counts are expressed as inclusive address ranges;
 `--max-count` controls request chunk size. Remove the development `debug eval`
 command. Python 3.8–3.10 are no longer supported.

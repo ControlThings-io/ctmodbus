@@ -1,4 +1,10 @@
-"""Native async transports and serialized, cancellable connection ownership."""
+"""Native async transports and serialized, cancellable connection ownership.
+
+Construct validated ConnectionSettings, await Connection.connect(settings), then
+use ``async with connection.operation()`` around related request calls. Clients
+and tasks are runtime state; only settings are serializable. Transport failures
+become CommandError. Protocol shape validation belongs to operations.py.
+"""
 
 import asyncio
 import inspect
@@ -23,7 +29,15 @@ Transport = Literal["tcp", "udp", "tls", "rtu", "ascii"]
 
 @dataclass(frozen=True)
 class ConnectionSettings:
-    """Serializable settings; never persist a live transport."""
+    """Immutable, JSON-compatible endpoint and transport configuration.
+
+    Construction raises CommandError for invalid settings: unit 1–247, port
+    1–65535, retries 0–10, finite timeout in (0, 300] seconds, baudrate
+    1–4,000,000, 7/8 data bits, N/E/O parity, and 1/2 stop bits. TLS options
+    require TLS; a separate key requires a certificate. File existence and
+    certificate validity are checked when creating the client, not here.
+    Direct construction defaults to port 502; the TLS command supplies 802.
+    """
 
     transport: Transport
     target: str
@@ -41,6 +55,7 @@ class ConnectionSettings:
     insecure: bool = False
 
     def __post_init__(self):
+        """Validate all fields immediately; raise CommandError before device I/O."""
         if self.transport not in ("tcp", "udp", "tls", "rtu", "ascii"):
             raise CommandError("Transport must be tcp, udp, tls, rtu, or ascii")
         if not isinstance(self.target, str) or not self.target.strip():
@@ -98,7 +113,13 @@ class ConnectionSettings:
 
 
 def tls_context(settings):
-    """Load trust roots and optional client identity off the event loop."""
+    """Return an SSLContext with trust and hostname verification by default.
+
+    This synchronous function loads files; async callers must offload it.
+    Explicit insecure settings disable verification. An empty key password
+    prevents terminal prompts; encrypted keys are unsupported. SSL and file
+    errors propagate to the connection-opening error boundary.
+    """
     context = ssl.create_default_context(cafile=settings.ca_file)
     if settings.insecure:
         context.check_hostname = False
@@ -111,7 +132,12 @@ def tls_context(settings):
 
 
 async def create_client(settings):
-    """Construct a client in the running event loop; disable implicit reconnects."""
+    """Return an unopened native async client for validated settings.
+
+    Run in an event loop; certificate loading uses a worker thread. The caller
+    owns connection and cleanup. File/client-construction errors propagate.
+    Reconnect delay is zero so interrupted work requires explicit reconnection.
+    """
     options = {
         "timeout": settings.timeout,
         "retries": settings.retries,
@@ -138,9 +164,15 @@ async def create_client(settings):
 
 
 class Connection:
-    """Own one client, invalidate stale work, and serialize wire transactions."""
+    """Own one client and serialize operations within a single event loop.
+
+    A generation counter prevents queued operations using a replaced transport.
+    The injected factory may return a client or an awaitable client. Callers
+    must reserve operation() before request(); request() does not take the lock.
+    """
 
     def __init__(self, client_factory=create_client):
+        """Initialize disconnected state without opening a socket or serial port."""
         self.client_factory = client_factory
         self.client = None
         self.settings = None
@@ -154,7 +186,13 @@ class Connection:
         return self.client is not None and self.client.connected
 
     async def connect(self, settings):
-        """Create and open a client, discarding failed or cancelled attempts."""
+        """Open settings under the lock and return None on success.
+
+        Reject an existing client or obsolete generation. Client.connect is
+        bounded by timeout + 1 seconds; factory creation precedes that bound.
+        Failed opens close the candidate. Transport errors and cancellation
+        become CommandError; other factory errors propagate.
+        """
         task = asyncio.current_task()
         generation = self.generation
         self.tasks.add(task)
@@ -184,7 +222,12 @@ class Connection:
 
     @asynccontextmanager
     async def operation(self):
-        """Reserve the current session for a complete command's requests."""
+        """Yield (client, settings) while exclusively reserving this session.
+
+        Raise CommandError for absent, disconnected, or replaced sessions.
+        Release the lock and task registration on any exit. This context does
+        not itself close the transport when its body fails or is cancelled.
+        """
         client, generation = self.client, self.generation
         if client is None:
             raise CommandError("No open session; connect first")
@@ -201,7 +244,11 @@ class Connection:
             self.tasks.discard(task)
 
     async def close(self):
-        """Cancel outstanding I/O before releasing the transport."""
+        """Invalidate queued work, cancel/drain other tasks, then clear state.
+
+        Return None; repeated calls are harmless. This low-level drain has no
+        timeout; the application supplies its own bounded shutdown path.
+        """
         self.generation += 1
         pending = self.tasks - {asyncio.current_task()}
         for task in pending:
@@ -214,14 +261,24 @@ class Connection:
             self.client = self.settings = None
 
     def abort(self):
-        """Discard the transport after interrupted I/O and reject queued work."""
+        """Synchronously close and clear transport/settings; increment generation.
+
+        Return None without awaiting or cancelling tasks. Generation checks
+        reject queued work, and callers remain responsible for draining tasks.
+        """
         self.generation += 1
         if self.client is not None:
             self.client.close()
         self.client = self.settings = None
 
     async def request(self, method, **kwargs):
-        """Bound each request even if a transport stops responding."""
+        """Await method(device_id=unit, **kwargs) and return a non-error reply.
+
+        Requires an active operation() reservation. Bound execution by
+        (timeout + 1) * (retries + 1) seconds; map transport/timeout failures,
+        absent replies, and Modbus exception replies to CommandError.
+        Cancellation propagates; callers decide read/write uncertainty.
+        """
         settings = self.settings
         try:
             async with asyncio.timeout((settings.timeout + 1) * (settings.retries + 1)):

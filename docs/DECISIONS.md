@@ -44,8 +44,8 @@ Accepted migration design; implemented policy, 2026-09-13; `b5dabf8`.
 
 Use CtuiApp, public `@command`/`Argument` APIs, `IntegerRanges`, typed lists,
 CommandError, and CommandResult. TUI and sequential `-c`/`-f` CLI share dispatch.
-Use plural snake_case data names, comma-separated write values, and explicit
-named options. Host and port are separate, including IPv6. Do not restore old
+Use plural snake_case names for raw reads/writes, comma-separated values, and
+explicit named options. Host and port are separate, including IPv6. Do not restore old
 aliases, host:port parsing, or space-separated multi-write values.
 
 Addresses are zero-based wire addresses 0–65535. Read ranges are inclusive,
@@ -146,7 +146,7 @@ future shared history. General commit preferences live in global instructions.
 
 ## D10 — Project memory and instruction scope
 
-Accepted, 2026-09-18; scope refined by owner request, 2026-09-20.
+Accepted, 2026-09-18; scope refined 2026-09-20 and 2026-09-21.
 
 Keep project constraints and context locations in AGENTS.md, current work and
 validation gaps in STATUS.md, and durable project rationale here. Track these
@@ -157,6 +157,13 @@ Keep STATUS focused on actionable state; Git preserves completed milestones and
 prior evidence reviews. Read relevant decisions on demand rather than requiring
 the entire log for every task. Retain technical boundaries and rationale so
 context savings do not depend on rediscovering correctness constraints.
+
+The September 21 owner-approved documentation policy places local implementation
+contracts in docstrings, shared architecture and unresolved discrepancies here,
+current work/evidence in STATUS, usage in README, and release procedures in
+RELEASE_CHECKLIST. MIGRATION remains a short compatibility guide; CHANGELOG
+retains release-facing history. These complementary files link to authoritative
+locations instead of duplicating contracts or current validation claims.
 
 ## D11 — Project-scoped typed tags
 
@@ -191,3 +198,41 @@ collision-specific TUI confirmation or explicit `--replace`.
 Tagged I/O reuses the existing serialized read/write path, response checks,
 recording, cancellation, and uncertain-write reporting. Tag definitions are
 included in whole-project snapshots and cleared by a full project reset.
+
+Superseded alternatives: explicit end-address ranges became type-derived widths;
+the initial little-byte proposal became big bytes/little words; raw HexBytes
+input was dropped in favor of typed numeric parsing; whitespace tag lists became
+ctui comma-separated lists; creation table names became singular. No permanent
+unit/host association is stored, including for a possible future multi-connection
+model; any such association would be session-local and is not implemented.
+
+## D12 — Implementation discrepancies and ctui proposals
+
+Audit findings, 2026-09-21, against `4718ddd`; unresolved, not new accepted policy.
+
+- D02's whole-operation serialization and D04's partial-read reporting do not
+  fully extend across a multi-tag read. `TagCommandMixin.read_tags` reserves one
+  tag at a time and discards earlier displayed rows on later failure. Earlier
+  planning suggested adjacent-read batching and retained completed tags; neither
+  is implemented. Stored raw records still contain completed exchanges.
+- `ModbusApp.prepare_tag_import` runs before lifecycle guards, matches only the
+  full command spelling, and rereads the file after confirmation. Tag commands
+  are not in the device-task guard set. Concurrent project changes or modified
+  import files can therefore invalidate the state that was confirmed.
+- `TagStore.import_all` rolls back ordinary exceptions, but cancellation bypasses
+  that handler. Other services share its SQL connection and can commit during
+  awaits; atomic imports depend on noninterleaving use. Full reset clears the tag
+  table in a separate step after ctui's reset, rather than one transaction.
+- Tag file reads/writes run synchronously on the event loop. Export uses a fixed
+  `.tmp` sibling, so atomic destination replacement is not concurrent-export
+  safety. Import has no file-size limit.
+- Signed radix bit patterns and negative decimal writes were checked in focused
+  tests, but the history does not establish a full final-revision regression run
+  after all tag follow-ups. Artifact checks likewise preceded those follow-ups.
+
+Proposed ctui improvements, not dependency commitments: state-dependent
+confirmation callbacks; application-owned project table initialization/reset/
+statistics; extensible reset sections. The comma-separated tag list removed the
+need for variadic CLI parameters. Keep these proposals separate from accepted
+Modbus semantics. Contract docstrings describe current behavior; resolving the
+discrepancies requires implementation work and regression checks.

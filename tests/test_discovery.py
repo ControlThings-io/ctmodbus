@@ -8,7 +8,10 @@ from ctmodbus.discovery import complete_serial
 
 
 class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    """Verify completion insertion and metadata with mocked OS port enumeration."""
+
     async def test_serial_completion_includes_usb_identity(self):
+        """Keep device paths insertable while showing USB identity or description."""
         ports = [
             SimpleNamespace(
                 device="/dev/ttyUSB0",

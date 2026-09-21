@@ -4,6 +4,10 @@ Target release tag: `v1.0.0rc1`. Python package version: `1.0.0rc1`.
 
 ## Automated gates
 
+Run every release gate without the development-only
+`--with-editable ../ctui` override. Confirm `pyproject.toml` and `uv.lock` use
+the intended ctui release from PyPI before starting.
+
 - [ ] `uv lock --check`
 - [ ] `uv run black --check src tests`
 - [ ] `uv run isort --check-only src tests`
@@ -26,11 +30,11 @@ Target release tag: `v1.0.0rc1`. Python package version: `1.0.0rc1`.
 - [ ] Publish only after release approval; creating/pushing a version tag triggers
   the existing trusted-PyPI publishing workflow.
 
-## Local migration validation
+## Recording validation
 
-The migration is kept at 1.0.0rc1. Local results are recorded in MIGRATION.md.
-Cross-platform CI and physical-device checks remain release gates even when the
-local suite passes. This migration does not publish packages or push tags.
+Record dated results and their revision in [docs/STATUS.md](docs/STATUS.md).
+Re-run these gates on the intended release revision; historical local results
+do not establish cross-platform CI, physical-device behavior, or publication.
 
 ## GitHub and PyPI release setup
 

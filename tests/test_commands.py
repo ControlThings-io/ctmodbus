@@ -16,11 +16,19 @@ from ctmodbus.operations import read_chunks
 
 
 def response(**kwargs):
+    """Return a successful fake PDU with caller-selected response fields."""
     return SimpleNamespace(isError=lambda: False, **kwargs)
 
 
 class FakeClient:
+    """Async client double with recorded calls, injected replies, and I/O gates.
+
+    A gate can suspend requests for cancellation/concurrency tests; peak tracks
+    overlap. It performs no real I/O and returns deterministic default PDUs.
+    """
+
     def __init__(self):
+        """Initialize a disconnected fake with empty call history and unset I/O gate."""
         self.connected = False
         self.calls = []
         self.reply = None
@@ -30,14 +38,23 @@ class FakeClient:
         self.peak = 0
 
     async def connect(self):
+        """Mark the fake connected and return True without opening a transport."""
         self.connected = True
         return True
 
     def close(self):
+        """Mark the fake disconnected; return None without external I/O."""
         self.connected = False
 
     def __getattr__(self, name):
+        """Return an async request stub for the requested PyModbus method name."""
+
         async def call(**kwargs):
+            """Record arguments, await an optional gate, and return the selected fake PDU.
+
+            Always decrement active calls on failure or cancellation; injected reply
+            errors propagate to the tested application boundary.
+            """
             self.calls.append((name, kwargs))
             self.active += 1
             self.peak = max(self.peak, self.active)
@@ -85,7 +102,10 @@ class FakeClient:
 
 
 class CommandTests(unittest.IsolatedAsyncioTestCase):
+    """Exercise shared dispatch with a fresh temporary project and fake client."""
+
     async def asyncSetUp(self):
+        """Open a fresh temporary project and inject a deterministic fake client."""
         self.directory = tempfile.TemporaryDirectory()
         self.client = FakeClient()
         self.app = ModbusApp(
@@ -94,14 +114,17 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         await self.app.backend.open()
 
     async def asyncTearDown(self):
+        """Stop application tasks, close project storage, and remove temporary data."""
         await self.app.on_stop()
         await self.app.backend.close()
         self.directory.cleanup()
 
     async def connect(self):
+        """Open the test TCP session using the injected fake client."""
         await self.app.dispatch("connect tcp localhost --unit 7")
 
     async def test_all_transport_commands(self):
+        """Verify each transport command stores settings and closes cleanly."""
         for transport in ("tcp", "udp", "rtu", "ascii"):
             await self.app.dispatch(
                 f"connect {transport} target --unit 7 --timeout 0.2"
@@ -110,6 +133,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             await self.app.dispatch("close")
 
     async def test_range_chunking_and_unit(self):
+        """Assert chunk boundaries, input order, and configured unit on every request."""
         await self.connect()
         result = await self.app.dispatch(
             "read holding_registers 0,124-126,65535 --max-count 2"
@@ -122,6 +146,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(args["device_id"] == 7 for _, args in self.client.calls))
 
     async def test_read_types_and_bit_padding(self):
+        """Ensure all read tables trim bit padding and record only requested values."""
         await self.connect()
         for kind in (
             "coils",
@@ -135,6 +160,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(len(row.decoded["values"]) == 3 for row in records))
 
     async def test_write_functions_and_acknowledgements(self):
+        """Verify single/multiple values select the corresponding write functions."""
         await self.connect()
         for kind, values in (
             ("coils", "1"),
@@ -150,6 +176,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_invalid_arguments_do_not_send(self):
+        """Ensure rejected ranges and write values produce no client requests."""
         await self.connect()
         commands = [
             "read coils 65536",
@@ -170,6 +197,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.calls, [])
 
     async def test_response_errors_and_short_reads(self):
+        """Reject missing, oversized, invalid-value, and exception register replies."""
         await self.connect()
         for reply in (
             SimpleNamespace(isError=lambda: True),
@@ -182,6 +210,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 await self.app.dispatch("read holding_registers 0")
 
     async def test_partial_read(self):
+        """Retain completed addresses in the error when a later chunk fails."""
         await self.connect()
         self.client.reply = lambda name, args: (
             response(function_code=3, registers=[10])
@@ -194,6 +223,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             await self.app.dispatch("read holding_registers 0-1 --max-count 1")
 
     async def test_bad_write_acknowledgements(self):
+        """Mark mismatched function/address/value/count replies as unconfirmed writes."""
         await self.connect()
         for reply in (
             response(function_code=6, address=99, registers=[1]),
@@ -207,6 +237,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 await self.app.dispatch(f"write holding_registers 0 {values}")
 
     async def test_sparse_identification_and_continuation(self):
+        """Accept sparse IDs across pages and escape device-supplied control bytes."""
         await self.connect()
         self.client.reply = lambda name, args: (
             response(information={0: b"Vendor"}, more_follows=255, next_object_id=2)
@@ -220,6 +251,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.client.calls), 2)
 
     async def test_cyclic_identification(self):
+        """Reject an identification continuation that repeats a previous object ID."""
         await self.connect()
         self.client.reply = lambda name, args: response(
             information={0: b"x"}, more_follows=255, next_object_id=0
@@ -228,6 +260,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             await self.app.dispatch("read id")
 
     async def test_serialized_reads_and_responsive_help(self):
+        """Ensure blocked reads serialize while local help remains responsive."""
         await self.connect()
         self.client.gate = asyncio.Event()
         first = asyncio.create_task(self.app.dispatch("read coils 0"))
@@ -240,6 +273,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.peak, 1)
 
     async def test_cancel_read_and_queued_work(self):
+        """Cancel active and queued reads, discard transport, and permit project change."""
         await self.connect()
         self.client.gate = asyncio.Event()
         first = asyncio.create_task(self.app.dispatch("read coils 0"))
@@ -254,6 +288,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         await self.app.dispatch("project create after-cancel")
 
     async def test_cancel_write_reports_uncertainty(self):
+        """Report unknown outcome when closing during a submitted write."""
         await self.connect()
         self.client.gate = asyncio.Event()
         task = asyncio.create_task(self.app.dispatch("write coils 0 1"))
@@ -263,9 +298,11 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             await task
 
     async def test_cancel_connect(self):
+        """Cancel an in-progress connection and remove its candidate transport."""
         started = asyncio.Event()
 
         async def blocked():
+            """Signal connection entry, then wait indefinitely for test cancellation."""
             started.set()
             await asyncio.Event().wait()
 
@@ -278,6 +315,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.app.connection.client)
 
     async def test_shutdown_cancels_io(self):
+        """Drain pending device work and disconnect during application shutdown."""
         await self.connect()
         self.client.gate = asyncio.Event()
         task = asyncio.create_task(self.app.dispatch("read coils 0"))
@@ -288,6 +326,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.client.connected)
 
     async def test_failed_connect_cleanup(self):
+        """Discard clients whose connect method returns failure."""
         self.client.connect = AsyncMock(return_value=False)
         with self.assertRaises(CommandError):
             await self.connect()
@@ -295,17 +334,20 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.client.connected)
 
     async def test_double_connect_rejected(self):
+        """Require explicit close before opening another session."""
         await self.connect()
         with self.assertRaisesRegex(CommandError, "already open"):
             await self.connect()
 
     async def test_disconnected_session(self):
+        """Reject operations when an existing client reports a lost connection."""
         await self.connect()
         self.client.connected = False
         with self.assertRaisesRegex(CommandError, "disconnected"):
             await self.app.dispatch("read coils 0")
 
     async def test_profiles_records_history_and_project_isolation(self):
+        """Keep profiles, records, and history local and guard active project changes."""
         await self.connect()
         await self.app.dispatch("profile save lab")
         await self.app.dispatch("read coils 0")
@@ -329,10 +371,12 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("read coils 0", [entry.command for entry in history])
 
     async def test_no_io_during_recording_session_start(self):
+        """Block device I/O and project changes until recording startup completes."""
         entered, release = asyncio.Event(), asyncio.Event()
         original = self.app.records.start_session
 
         async def slow_start(*args, **kwargs):
+            """Pause recording startup until released, then call the original service."""
             entered.set()
             await release.wait()
             return await original(*args, **kwargs)
@@ -350,6 +394,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await self.app.records.query()), 2)
 
     async def test_record_warning_preserved_on_protocol_error(self):
+        """Attach storage warnings without losing the underlying protocol error."""
         await self.connect()
         self.client.reply = lambda name, args: response(function_code=3, registers=[])
         with patch.object(
@@ -359,6 +404,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 await self.app.dispatch("read holding_registers 0")
 
     async def test_cli_command_file_and_argument_failure(self):
+        """Run command files in order and return status 2 for invalid arguments."""
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as path:
@@ -386,6 +432,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(self.client.connected)
 
     async def test_external_cancellation_then_project_change(self):
+        """Finish the original recording session after external read cancellation."""
         await self.connect()
         self.client.gate = asyncio.Event()
         task = asyncio.create_task(self.app.dispatch("read coils 0"))
@@ -398,6 +445,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.app.records.query(), [])
 
     async def test_invalid_profile(self):
+        """Reject malformed saved connection settings before opening a transport."""
         await self.app.configs.save(
             "bad", {"transport": "tcp", "target": "localhost", "timeout": "oops"}
         )
@@ -405,6 +453,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             await self.app.dispatch("profile connect bad")
 
     async def test_record_failure_keeps_acknowledged_write(self):
+        """Retain acknowledged-write success when recording fails, with a warning."""
         await self.connect()
         with patch.object(
             self.app.records, "append", AsyncMock(side_effect=OSError("disk full"))
@@ -416,6 +465,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cli_sequence_and_cleanup(self):
         # run_cli owns backend lifecycle; use another app and directory.
+        """Verify sequential CLI output, error status, and automatic disconnection."""
         with tempfile.TemporaryDirectory() as path:
             app = ModbusApp(data_dir=path, client_factory=lambda settings: self.client)
             out, err = io.StringIO(), io.StringIO()
@@ -439,7 +489,10 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ValidationTests(unittest.TestCase):
+    """Check pure range, settings, and rendering contracts without device I/O."""
+
     def test_range_endpoints_and_order(self):
+        """Preserve inclusive endpoints, repeats, and out-of-order read spans."""
         spans = list(read_chunks(IntegerRanges("65535,0-2,1"), 2, 125))
         self.assertEqual(
             [(x.start, x.count, x.stop) for x in spans],
@@ -447,6 +500,7 @@ class ValidationTests(unittest.TestCase):
         )
 
     def test_invalid_connection_settings(self):
+        """Reject out-of-range, non-finite, and unsupported settings at construction."""
         for kwargs in (
             {"unit": 0},
             {"unit": 248},
@@ -464,6 +518,7 @@ class ValidationTests(unittest.TestCase):
                 ConnectionSettings("tcp", "host", **kwargs)
 
     def test_safe_formatting(self):
+        """Escape terminal controls while preserving compressed ranges and sparse IDs."""
         self.assertNotIn("\x1b", format_values("holding_registers", [(0, 27)]))
         self.assertIn("0-1", format_values("coils", [(0, 1), (1, 1), (3, 1)]))
         self.assertIn("ObjectID 200", format_identification({200: b"\xff"}))

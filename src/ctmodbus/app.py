@@ -1,4 +1,9 @@
-"""Application ownership and ctui lifecycle integration."""
+"""Application ownership, shared TUI/CLI dispatch, and ctui lifecycle integration.
+
+ModbusApp owns the connection, project services, recording session, and command
+tasks. Command methods return strings or CommandResult; expected failures use
+CommandError. ctui derives usage and completion from decorated signatures.
+"""
 
 import asyncio
 import shlex
@@ -53,7 +58,14 @@ async def complete_profiles(context):
 
 
 class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
-    """A Modbus client with one connection and project-scoped services."""
+    """A Modbus client with one connection and project-scoped services.
+
+    Open the backend before direct dispatch, or use run/run_cli for managed
+    lifecycle. Always stop device work before closing the backend. Connection
+    commands validate ConnectionSettings and share open_connection's return
+    and failure contracts; decorators define CLI names and named options.
+    The application is intended for one event loop, not concurrent threads.
+    """
 
     name = "ctmodbus"
     version = version("ctmodbus")
@@ -64,6 +76,11 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
     project_migrations = {1: (TagStore.CREATE,)}
 
     def __init__(self, *, client_factory=create_client, **kwargs):
+        """Register project templates and runtime guards without opening I/O.
+
+        Forward kwargs to CtuiApp; inject a sync/async client factory for tests.
+        TagStore uses the configured backend, which must support project SQL.
+        """
         super().__init__(**kwargs)
         self.connection = Connection(client_factory)
         self.tags = TagStore(self.backend)
@@ -102,13 +119,24 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         return f"Project: {project} | {state}{self._progress}"
 
     def update_progress(self, completed, total):
-        """Refresh the TUI footer without affecting CLI output."""
+        """Set completed/total footer progress; total=0 clears it; return None.
+
+        Invalidate the TUI only if its runtime has been built; CLI is unaffected.
+        """
         self._progress = f" | Read {completed}/{total}" if total else ""
         if hasattr(self, "app"):
             self.app.invalidate()
 
     async def prepare_tag_import(self, text, tokens, kwargs):
-        """Prompt for project-specific tag collisions and return command text."""
+        """Return (command_text, rejected_result_or_None) for tag import preflight.
+
+        For the exact ``import tags`` spelling without --replace, load the file
+        and current names. A synchronous/coroutine confirm_callback can approve
+        replacement or return a rejected result; absent callbacks raise
+        ConfirmationRequired listing collisions. Validation errors propagate.
+        This preflight precedes dispatch guards and does not reserve the project
+        or imported content while awaiting confirmation; see D12 discrepancies.
+        """
         if len(tokens) < 3 or tokens[:2] != ["import", "tags"]:
             return text, None
         path_token = next(
@@ -142,6 +170,15 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
     async def dispatch(  # pylint: disable=too-many-branches,too-many-statements
         self, text, **kwargs
     ):
+        """Return the ctui result for text while arbitrating device lifecycle.
+
+        Reject project transitions during tracked device work/open connections,
+        and device work during opening, closing, or stopping. Attach recording
+        warnings to success or CommandError without disguising acknowledged
+        writes. Cancellation inside execution becomes CommandError. shlex errors
+        and preflight failures precede that boundary. Tag management/imports are
+        currently outside the device-task set; this is not a global command lock.
+        """
         tokens = shlex.split(text)
         # Collision names require reading both the file and active project.
         text, rejected = await self.prepare_tag_import(text, tokens, kwargs)
@@ -233,6 +270,12 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
             self._record_warnings.pop(task, None)
 
     async def record_operation(self, direction, decoded):
+        """Append decoded data to the current Modbus record session; return None.
+
+        No session means no record. Catch ordinary storage errors as task-local
+        warnings so an acknowledged write never looks like a failed protocol
+        operation and invites a duplicate write. Cancellation still propagates.
+        """
         if self._record_session is None:
             return
         try:
@@ -250,14 +293,23 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
             )
 
     async def finish_record_session(self):
-        """End recording before switching connections or closing project storage."""
+        """Clear the active session ID and await optional end_session; return None.
+
+        Repeated calls are harmless; storage errors propagate after the ID is
+        cleared. Call before switching project storage to keep records isolated.
+        """
         session, self._record_session = self._record_session, None
         end_session = getattr(self.records, "end_session", None)
         if session is not None and end_session is not None:
             await end_session(session)
 
     async def close_connection(self):
-        """Drain device commands before transport and record-session cleanup."""
+        """Cancel tracked device dispatches and clear transport/session state.
+
+        Serialize close calls, wait up to five seconds for task draining, and
+        abort the transport even on drain failure. Return None; TimeoutError or
+        record-session cleanup errors can propagate. Always clear footer progress.
+        """
         async with self._close_lock:
             self._closing = True
             try:
@@ -281,6 +333,7 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         self._stopping = False
 
     async def on_stop(self):
+        """Reject new dispatches and await close_connection before backend closure."""
         self._stopping = True
         await self.close_connection()
 
@@ -290,7 +343,12 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         return await asyncio.to_thread(suggestions)
 
     async def open_connection(self, settings):
-        """Open a transport and its project recording session together."""
+        """Return an appended OPENED result after connection and recording start.
+
+        Connection errors propagate as CommandError. If session setup fails or
+        is cancelled, abort the new connection and propagate the exception so
+        subsequent operations cannot run without their intended session.
+        """
         await self.connection.connect(settings)
         try:
             await self.finish_record_session()
@@ -431,7 +489,12 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
 
     @command(name="profile save")
     async def profile_save(self, name: str):
-        """Save the current connection settings as a named project config."""
+        """Save current settings under NAME and return an appended confirmation.
+
+        Existing configs are replaced. Missing settings raise CommandError;
+        storage errors propagate. Profiles contain certificate paths, not keys
+        or certificate contents, and depend on those paths on the next machine.
+        """
         if self.connection.settings is None:
             raise CommandError("Connect before saving a profile")
         await self.configs.save(name, self.connection.settings.as_dict())
@@ -442,7 +505,11 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         arguments={"name": Argument(completer=complete_profiles)},
     )
     async def profile_connect(self, name: str):
-        """Connect using a named project config."""
+        """Load NAME, validate ConnectionSettings, and return open_connection result.
+
+        Missing or invalid profiles raise CommandError before device I/O;
+        otherwise open_connection owns setup and failure cleanup.
+        """
         values = await self.configs.get(name)
         try:
             settings = ConnectionSettings(**values)

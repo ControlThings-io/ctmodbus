@@ -1,4 +1,10 @@
-"""Project-scoped typed Modbus tags and portable TOML files."""
+"""Project-scoped typed Modbus tags and portable TOML files.
+
+Pure codecs operate on validated Tag definitions and raw Modbus values.
+TagStore persists definitions in the active ctui SQLite project; commands add
+CLI validation and shared protocol operations. Names are case-sensitive.
+Byte order defaults to big within a word and word order to little across words.
+"""
 
 from __future__ import annotations
 
@@ -48,7 +54,13 @@ INTEGER_PATTERN = re.compile(
 
 @dataclass(frozen=True)
 class Tag:
-    """A named typed view of one bit or one or more registers."""
+    """Immutable definition of one bit or a scalar occupying 1–4 registers.
+
+    Construction alone does not validate; call validate() at input boundaries.
+    table uses plural protocol identifiers even though tag create takes singular
+    names. Addresses are zero-based; type derives width. No connection identity
+    or current value is stored. Eight-bit types still occupy a complete register.
+    """
 
     name: str
     table: str
@@ -71,7 +83,13 @@ class Tag:
         return self.address + self.count
 
     def validate(self):
-        """Reject definitions that cannot be mapped to Modbus addresses."""
+        """Return self when valid; raise CommandError for invalid definitions.
+
+        Require NAME_PATTERN, supported table/type/order, and the entire derived
+        span inside 0..65535. Bool uses bit tables; numeric types use register
+        tables. Explicit order options on bool are rejected at command/import
+        boundaries, not by this internal representation.
+        """
         if not isinstance(self.name, str) or not NAME_PATTERN.fullmatch(self.name):
             raise CommandError(
                 "Tag names must start with a letter or underscore and contain only "
@@ -111,22 +129,35 @@ class Tag:
 
 
 class TagStore:
-    """Persist tags in the active ctui project database."""
+    """Persist tags using the backend's currently open SQLite connection.
+
+    No live values or transport identities are stored. Methods create the table
+    lazily, and mutations commit then touch project metadata. The backend owns
+    connection lifetime. Calls are not protected by a store lock; callers must
+    coordinate transactions and project changes. Unexpected SQL errors propagate.
+    """
 
     CREATE = """CREATE TABLE IF NOT EXISTS tags(
         name TEXT PRIMARY KEY, table_name TEXT NOT NULL, address INTEGER NOT NULL,
         type_name TEXT NOT NULL, byte_order TEXT NOT NULL, word_order TEXT NOT NULL)"""
 
     def __init__(self, backend):
+        """Retain the project backend without opening or creating a database."""
         self.backend = backend
 
     async def ensure(self):
-        """Create the application table for new projects when first used."""
+        """Create the table if absent and commit; return None.
+
+        ctui migrations cover older projects, but new-project initialization
+        does not execute those migrations, so reads also call this lazy hook.
+        It commits the shared connection and must not interleave another writer.
+        """
         await self.backend.connection.execute(self.CREATE)
         await self.backend.connection.commit()
 
     @staticmethod
     def _row(row):
+        """Return a validated Tag from the six-column stored tuple."""
         return Tag(*row).validate()
 
     async def list(self):
@@ -139,7 +170,7 @@ class TagStore:
         return [self._row(row) for row in await cursor.fetchall()]
 
     async def get(self, name):
-        """Return one tag or raise a user-facing error."""
+        """Return the exact-name Tag; raise CommandError if absent or invalid."""
         await self.ensure()
         cursor = await self.backend.connection.execute(
             "SELECT name, table_name, address, type_name, byte_order, word_order "
@@ -152,11 +183,15 @@ class TagStore:
         return self._row(row)
 
     async def names(self):
-        """Return the active project's tag names."""
+        """Return a set of active-project names after validating stored definitions."""
         return {tag.name for tag in await self.list()}
 
     async def save(self, tag, *, replace=False):
-        """Persist one validated tag."""
+        """Validate and commit tag; return None, replacing only if requested.
+
+        Duplicate names become CommandError. Roll back SQL failures; other
+        exceptions propagate. Metadata touch happens after the data commit.
+        """
         tag.validate()
         await self.ensure()
         sql = (
@@ -185,7 +220,7 @@ class TagStore:
         await self.backend.touch()
 
     async def delete(self, name):
-        """Delete an existing tag."""
+        """Delete NAME and return None; CommandError rejects absent/invalid tags."""
         await self.get(name)
         await self.backend.connection.execute(
             "DELETE FROM tags WHERE name = ?", (name,)
@@ -194,7 +229,11 @@ class TagStore:
         await self.backend.touch()
 
     async def rename(self, name, new_name):
-        """Rename an existing tag without changing its definition."""
+        """Rename NAME and return None without changing its definition.
+
+        Invalid/missing names and duplicate destinations raise CommandError;
+        SQL failures roll back and propagate. Touch metadata after committing.
+        """
         Tag(new_name, "coils", 0, "bool").validate()
         await self.get(name)
         try:
@@ -217,7 +256,13 @@ class TagStore:
         await self.backend.touch()
 
     async def import_all(self, tags, *, replace=False):
-        """Import a validated collection in one transaction."""
+        """Commit prevalidated tags in one transaction and return None.
+
+        Caller must validate every definition and settle replacement policy
+        before calling. SQL errors roll back all rows and propagate. The later
+        metadata touch is separate from the committed transaction. Cancellation
+        is not caught by the ordinary-exception rollback handler.
+        """
         await self.ensure()
         sql = (
             "INSERT OR REPLACE INTO tags VALUES (?, ?, ?, ?, ?, ?)"
@@ -246,6 +291,12 @@ class TagStore:
 
 
 def _parse_integer(text):
+    """Return a signed integer from decimal or 0b/0o/0d/0x text.
+
+    Strip underscores from matched digits and accept an optional leading sign.
+    Malformed text or digits invalid for the radix raise ValueError. Width and
+    two's-complement interpretation are handled by callers.
+    """
     match = INTEGER_PATTERN.fullmatch(text)
     if not match:
         raise ValueError("expected an integer or 0b/0o/0d/0x literal")
@@ -257,7 +308,15 @@ def _parse_integer(text):
 
 
 def parse_tag_value(tag, text):
-    """Parse a natural typed value without depending on a raw byte syntax."""
+    """Return bool, int, or float parsed for an already validated tag.
+
+    Bool accepts case-insensitive 0/1, false/true, off/on. Integer syntax follows
+    _parse_integer; unsigned nondecimal literals fitting a signed tag's bit width
+    use two's complement, while explicit signs and decimal stay numeric. Floats
+    accept decimal/scientific text or integer literals converted numerically,
+    never raw IEEE bits. Reject non-finite input with CommandError. Integer and
+    float32 range validation is deferred to encode_tag_value.
+    """
     if tag.type == "bool":
         values = {
             "0": False,
@@ -297,7 +356,14 @@ def parse_tag_value(tag, text):
 
 
 def encode_tag_value(tag, value):
-    """Encode a typed value into unsigned 16-bit Modbus register values."""
+    """Return wire integers for a validated tag and parsed value.
+
+    Bool returns one 0/1 value. Numeric values use struct widths and the tag's
+    byte/word order; overflow becomes CommandError. Eight-bit values zero-pad
+    the unused byte (including negative int8), deliberately avoiding a
+    read-modify-write race. This function assumes parse_tag_value already
+    rejected non-finite floats; it is not a general input-validation boundary.
+    """
     if tag.type == "bool":
         return [int(value)]
     size, format_code = TYPE_FORMATS[tag.type]
@@ -316,7 +382,13 @@ def encode_tag_value(tag, value):
 
 
 def decode_tag_value(tag, values):
-    """Decode Modbus bits/registers according to a tag definition."""
+    """Return a Python scalar from exactly tag.count validated wire values.
+
+    Reverse byte/word transforms and ignore the unused byte for 8-bit tags.
+    Raw floating-point NaN/infinity can be decoded even though write input
+    rejects them. Caller validates lengths and wire ranges; malformed direct
+    calls may raise IndexError, OverflowError, or struct.error.
+    """
     if tag.type == "bool":
         return bool(values[0])
     words = [int(value).to_bytes(2, "big") for value in values]
@@ -332,7 +404,13 @@ def decode_tag_value(tag, values):
 
 
 def parse_tag_document(path):
-    """Load and fully validate a versioned tag TOML document."""
+    """Synchronously read PATH and return validated Tag objects in file order.
+
+    Require ctmodbus-tags format/version 1 and a tags table; reject unknown
+    per-tag fields and Boolean order options. Convert file, TOML, and definition
+    failures to CommandError. No project mutations occur here. Whole files are
+    read without a size limit; callers currently invoke this on the event loop.
+    """
     try:
         with path.open("rb") as stream:
             document = tomllib.load(stream)
@@ -378,7 +456,11 @@ def parse_tag_document(path):
 
 
 def export_tag_document(tags):
-    """Render deterministic TOML without adding another dependency."""
+    """Return versioned TOML text for validated tags in caller-supplied order.
+
+    Quote names, include numeric order settings, and emit an empty tags table
+    even with no definitions. Perform no file I/O or additional validation.
+    """
     lines = ['format = "ctmodbus-tags"', "version = 1", "", "[tags]"]
     for tag in tags:
         lines.extend(("", f"[tags.{json.dumps(tag.name)}]"))
@@ -400,7 +482,13 @@ TAG_ORDER_ARGUMENTS = {
 
 
 class TagCommandMixin:
-    """Commands for typed, project-scoped Modbus tags."""
+    """Commands for typed tags using app-owned tags and protocol services.
+
+    ctui signatures/decorators define command syntax. Read/write/create/rename/
+    delete return append CommandResult; listing, inspection, and file commands
+    return text. Expected input/protocol errors use CommandError. Store and
+    unexpected file errors can propagate; no mixin-wide serialization is added.
+    """
 
     @command(name="tag create", arguments=TAG_ORDER_ARGUMENTS)
     async def tag_create(
@@ -424,7 +512,13 @@ class TagCommandMixin:
         byte_order: Literal["big", "little"] | None = None,
         word_order: Literal["little", "big"] | None = None,
     ):
-        """Create a typed tag; its address count is derived from its type."""
+        """Create NAME TABLE ADDRESS TYPE with optional byte/word order flags.
+
+        Accept singular tables and derive width from type; normalize storage to
+        plural tables. Defaults are big bytes/little words. Reject duplicate
+        names and Boolean order flags with CommandError. Overlap is legal and
+        produces a warning after save because alternate decodings are useful.
+        """
         if type_name == "bool" and (byte_order is not None or word_order is not None):
             raise CommandError("Boolean tags do not accept byte or word order")
         stored_table = CREATE_TABLES[table]
@@ -496,7 +590,15 @@ class TagCommandMixin:
 
     @command(name="read tags", arguments={"names": Argument(completer=complete_tags)})
     async def read_tags(self, names: list[str] | None = None):
-        """Read all tags, or comma-separated names in the requested order."""
+        """Read all tags, or comma-separated names in the requested order.
+
+        Resolve every name before I/O; None selects name-sorted project tags.
+        Empty selections and unknown names raise CommandError. Each tag gets a
+        separate read reservation, preserving explicit order and duplicates;
+        this is not a single snapshot. Return decoded and raw columns only after
+        all reads succeed. Earlier tag rows are currently lost on later failure;
+        read_values_data supplies only the failing tag's partial error output.
+        """
         requested = names
         if requested is None:
             requested = [tag.name for tag in await self.tags.list()]
@@ -529,7 +631,13 @@ class TagCommandMixin:
 
     @command(name="write tag", arguments={"name": Argument(completer=complete_tags)})
     async def write_tag(self, name: str, value: str):
-        """Parse and write a value according to a tag's declared type."""
+        """Execute ``write tag NAME VALUE`` through the validated write path.
+
+        Use ``--`` before negative positional values. Reject read-only tables
+        and bad encodings before I/O; return decoded input and raw acknowledged
+        values. write_values owns serialization and uncertain-write errors.
+        Acknowledgement does not establish independent device readback.
+        """
         tag = await self.tags.get(name)
         if tag.table not in WRITABLE_TABLES:
             raise CommandError(f"{tag.table} tags are read-only")
@@ -544,7 +652,13 @@ class TagCommandMixin:
 
     @command(name="export tags")
     async def export_tags(self, path: Path):
-        """Export all active-project tags to versioned TOML."""
+        """Write name-sorted project tags to PATH and return destination text.
+
+        Append .toml unless the existing suffix matches case-insensitively.
+        Synchronously write PATH.tmp then os.replace the destination. The rename
+        is atomic, but the fixed temporary name is not safe for concurrent
+        exports to the same path. OSError becomes CommandError after cleanup.
+        """
         if path.suffix.lower() != ".toml":
             path = path.with_name(path.name + ".toml")
         temporary = path.with_name(path.name + ".tmp")
@@ -566,7 +680,13 @@ class TagCommandMixin:
         arguments={"replace": Argument(flags=("--replace",))},
     )
     async def import_tags(self, path: Path, replace: bool = False):
-        """Import a validated TOML tag set atomically."""
+        """Validate PATH and merge tags, returning the imported count as text.
+
+        Reject existing names unless replace=True. TUI confirmation is prepared
+        separately by ModbusApp.prepare_tag_import; direct calls never prompt.
+        The file is reread here. Ordinary SQL failures roll back imported rows;
+        cancellation and project races are documented as open discrepancies.
+        """
         tags = parse_tag_document(path)
         collisions = sorted({tag.name for tag in tags} & await self.tags.names())
         if collisions and not replace:

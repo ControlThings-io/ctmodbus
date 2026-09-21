@@ -13,12 +13,18 @@ from ctmodbus.app import ModbusApp
 
 
 class TerminalTests(unittest.IsolatedAsyncioTestCase):
+    """Drive the real TUI with pipe input and dummy output, without a physical terminal."""
+
     async def test_terminal_commands_and_shutdown(self):
+        """Await command completion events and verify exit closes the fake connection."""
         ready = asyncio.Event()
         finished = asyncio.Queue()
 
         class TestApp(ModbusApp):
+            """Expose terminal readiness to the surrounding asynchronous test."""
+
             async def on_ready(self):
+                """Signal that input may be injected; return None."""
                 ready.set()
 
         with tempfile.TemporaryDirectory() as path, create_pipe_input() as pipe:

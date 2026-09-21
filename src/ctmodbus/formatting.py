@@ -1,4 +1,8 @@
-"""Pure formatting for identical TUI and command-line results."""
+"""Pure formatting for identical TUI and command-line results.
+
+Return strings without changing device/project state. Callers provide validated
+wire values; rendering escapes control characters and uses explicit UTC times.
+"""
 
 from datetime import datetime, timezone
 from itertools import groupby
@@ -12,7 +16,13 @@ def timestamp():
 
 
 def format_values(kind, values):
-    """Summarize consecutive equal values without hiding address gaps or order."""
+    """Return a table of ordered (address, value) pairs for a canonical table.
+
+    Collapse adjacent equal values without hiding gaps, repeats, or input order.
+    Bit tables show 0/1; registers add hex and one Unicode code point (not UTF-8
+    decoding). Escape nonprintable characters. Caller validates wire ranges;
+    malformed pairs or values can raise ordinary Python conversion errors.
+    """
     bits = kind in ("coils", "discrete_inputs")
     rows = []
     for _, group in groupby(
@@ -39,7 +49,12 @@ def format_values(kind, values):
 
 
 def format_identification(information):
-    """Label sparse device objects and escape terminal control characters."""
+    """Return an ID-sorted table from a validated object-ID/value mapping.
+
+    Label standard IDs 0–6 and retain sparse vendor IDs. Decode byte strings
+    using UTF-8 with escaped invalid bytes and repr all values to escape
+    terminal controls. Perform no protocol validation or I/O.
+    """
     names = (
         "VendorName",
         "ProductCode",

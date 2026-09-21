@@ -18,7 +18,10 @@ from tests.test_commands import FakeClient, response
 
 
 class TagCodecTests(unittest.TestCase):
+    """Verify scalar encodings and parser boundaries independently of device I/O."""
+
     def test_integer_radices_and_byte_word_order(self):
+        """Check radix parsing, signed bit patterns, and default/swapped register bytes."""
         tag = Tag("timer", "holding_registers", 2, "int32")
         self.assertEqual(parse_tag_value(tag, "0d33_000"), 33000)
         self.assertEqual(parse_tag_value(tag, "0b1000_0001"), 129)
@@ -44,6 +47,7 @@ class TagCodecTests(unittest.TestCase):
         )
 
     def test_eight_bit_padding_and_round_trips(self):
+        """Verify zero padding and signed, wide-integer, and floating codec round trips."""
         big = Tag("x", "holding_registers", 0, "uint8")
         little = Tag("x", "holding_registers", 0, "uint8", byte_order="little")
         self.assertEqual(encode_tag_value(big, 0x12), [0x0012])
@@ -60,6 +64,7 @@ class TagCodecTests(unittest.TestCase):
                 self.assertEqual(decode_tag_value(tag, encoded), value)
 
     def test_value_and_definition_validation(self):
+        """Reject incompatible tables, invalid spans/names, and non-finite float input."""
         with self.assertRaises(CommandError):
             Tag("bad name", "coils", 0, "bool").validate()
         with self.assertRaises(CommandError):
@@ -72,11 +77,15 @@ class TagCodecTests(unittest.TestCase):
                 parse_tag_value(float_tag, value)
 
     def test_empty_export_has_an_importable_tags_table(self):
+        """Ensure an empty export includes the required tags table header."""
         self.assertIn("[tags]", export_tag_document([]))
 
 
 class TagCommandTests(unittest.IsolatedAsyncioTestCase):
+    """Exercise tag persistence and commands with isolated storage and fake I/O."""
+
     async def asyncSetUp(self):
+        """Open a fresh temporary project and inject a deterministic fake client."""
         self.directory = tempfile.TemporaryDirectory()
         self.client = FakeClient()
         self.app = ModbusApp(
@@ -85,14 +94,17 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         await self.app.backend.open()
 
     async def asyncTearDown(self):
+        """Stop application tasks, close project storage, and remove temporary data."""
         await self.app.on_stop()
         await self.app.backend.close()
         self.directory.cleanup()
 
     async def connect(self):
+        """Open the test TCP session using the injected fake client."""
         await self.app.dispatch("connect tcp localhost")
 
     async def test_create_list_rename_delete_and_project_scope(self):
+        """Verify tag CRUD, project switching, and full-reset removal."""
         await self.app.dispatch("tag create timer holding_register 2 int32")
         result = await self.app.dispatch("tag list")
         self.assertIn("timer", result.output)
@@ -113,6 +125,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.app.tags.list(), [])
 
     async def test_overlap_warning_and_duplicate_rejection(self):
+        """Permit overlaps but reject duplicate names and invalid creation syntax."""
         await self.app.dispatch("tag create first holding_register 0 uint32")
         result = await self.app.dispatch("tag create second holding_register 1 uint16")
         self.assertIn("overlaps tags: first", result.output)
@@ -124,6 +137,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.app.dispatch("tag create old coils 0 bool")
 
     async def test_tag_reads_and_writes(self):
+        """Verify raw encodings, signed writes, read-only rejection, and read-all dispatch."""
         await self.app.dispatch("tag create switch coil 0 bool")
         await self.app.dispatch("tag create state holding_register 5 uint8")
         await self.app.dispatch("tag create timer holding_register 6 int32")
@@ -179,10 +193,12 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.client.calls), 4)
 
     async def test_read_all_requires_at_least_one_defined_tag(self):
+        """Report an empty tag project before attempting any device read."""
         with self.assertRaisesRegex(CommandError, "No tags are defined"):
             await self.app.dispatch("read tags")
 
     async def test_export_import_collision_confirmation_and_replace(self):
+        """Round-trip TOML and verify collision rejection, declined prompts, and replace."""
         await self.app.dispatch("tag create timer holding_register 2 int32")
         path = Path(self.directory.name) / "my_tags"
         result = await self.app.dispatch(f"export tags {path}")
@@ -198,6 +214,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         messages = []
 
         async def decline(message):
+            """Capture the confirmation message and return False without changing tags."""
             messages.append(message)
             return False
 
@@ -210,6 +227,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Imported 1 tags", result.output)
 
     async def test_import_is_validated_before_changes(self):
+        """Ensure one malformed definition prevents every imported tag from being saved."""
         path = Path(self.directory.name) / "bad.toml"
         path.write_text(
             'format = "ctmodbus-tags"\nversion = 1\n'

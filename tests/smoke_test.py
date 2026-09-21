@@ -9,6 +9,12 @@ from ctmodbus.app import ModbusApp
 
 
 def main():
+    """Verify installed metadata, CLI help, and isolated project startup.
+
+    Run with an installed artifact, not an editable checkout. Assert package
+    versions and expected commands; subprocess failures propagate. Temporary
+    project storage is removed on exit. Return None after printing success.
+    """
     assert version("ctmodbus").startswith("1.")
     assert version("ctui").startswith("1.")
     result = subprocess.run(

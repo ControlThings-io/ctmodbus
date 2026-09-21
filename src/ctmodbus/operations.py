@@ -1,4 +1,9 @@
-"""Typed Modbus commands, validation, and response handling."""
+"""Typed Modbus commands, validation, and response handling.
+
+Wire addresses are zero-based and inclusive at the CLI. Reads retain completed
+chunks on error; writes are one request and an acknowledgement is not readback.
+The application supplies connection, records, and progress-event services.
+"""
 
 import asyncio
 
@@ -23,7 +28,13 @@ READ_ARGUMENTS = {"max_count": Argument(flags=("--max-count",))}
 
 
 def read_chunks(addresses, max_count, limit):
-    """Validate the entire request before yielding exclusive-endpoint spans."""
+    """Yield IntegerSpan chunks after validating all inclusive input ranges.
+
+    max_count must be 1..limit; addresses must fit 0..65535 with at most 65536
+    entries including repeats. Preserve order and duplicates; do not merge
+    ranges. CommandError is raised when the generator is consumed, so callers
+    materialize it before sending any requests.
+    """
     if not 1 <= max_count <= limit:
         raise CommandError(f"max-count must be between 1 and {limit}")
     if any(span.stop > 65536 for span in addresses):
@@ -38,7 +49,12 @@ def read_chunks(addresses, max_count, limit):
 
 
 def validate_write(kind, address, values):
-    """Reject invalid writes before issuing any protocol request."""
+    """Return None for a valid coil/register write, otherwise raise CommandError.
+
+    Caller supplies coils or holding_registers. Require exact integers, 0/1
+    coils or 0..65535 registers, a nonempty list limited to 1968 coils or 123
+    registers, and an address span entirely inside 0..65535. Never split writes.
+    """
     limit = 1968 if kind == "coils" else 123
     maximum = 1 if kind == "coils" else 65535
     if not values or len(values) > limit:
@@ -50,13 +66,27 @@ def validate_write(kind, address, values):
 
 
 class ModbusCommandMixin:
-    """Commands mixed into ModbusApp; connection and services belong to the app."""
+    """Commands mixed into ModbusApp; connection and services belong to the app.
+
+    Read wrappers accept ctui IntegerRanges (inclusive comma-separated CLI
+    spans) and return read_values' append result or propagate its CommandError.
+    Bit reads allow 2000 values/request, register reads 125. Write wrappers take
+    one start address and a comma-separated integer list; write_values defines
+    their limits, acknowledgement semantics, and failure contracts.
+    """
 
     async def record_operation(self, direction, decoded):
-        """Overridden by the application to persist decoded protocol records."""
+        """Return None by default; the application overrides this recording hook."""
 
     async def read_values_data(self, kind, addresses, max_count):
-        """Read ordered chunks and return address/value pairs."""
+        """Return ordered (address, value) pairs for a canonical read table.
+
+        Validate read_chunks before I/O and reserve one connection across all
+        chunks. Check function, length, and value bounds; trim bit padding only.
+        Record requests/replies and emit per-chunk progress, reset on exit.
+        CommandError includes completed raw values; cancellation aborts the
+        transport and becomes CommandError with the same partial results.
+        """
         chunks = list(read_chunks(addresses, max_count, READ_LIMITS[kind]))
         results = []
         try:
@@ -138,7 +168,10 @@ class ModbusCommandMixin:
         return results
 
     async def read_values(self, kind, addresses, max_count):
-        """Read ordered chunks and format the completed values."""
+        """Return an append CommandResult using read_values_data and UTC time.
+
+        Propagate its validation, protocol, and partial-read CommandError.
+        """
         results = await self.read_values_data(kind, addresses, max_count)
         return CommandResult.append(
             f"{timestamp()} Read {kind}\n{format_values(kind, results)}"
@@ -146,7 +179,7 @@ class ModbusCommandMixin:
 
     @staticmethod
     def partial_read(kind, results, message):
-        """Include completed addresses in a failed read's error output."""
+        """Return message plus formatted completed pairs, or message if empty."""
         if results:
             return (
                 f"{message}\nPartial read: {len(results)} addresses completed\n"
@@ -182,7 +215,13 @@ class ModbusCommandMixin:
 
     @command(name="read id")
     async def read_id(self):
-        """Read basic device identification, including continued responses."""
+        """Return appended identification text from ``read id``.
+
+        Hold one operation reservation across continued pages. Permit sparse
+        object IDs but reject empty/invalid pages and continuation cycles with
+        CommandError. Cancellation closes the connection. Unlike range reads,
+        failures do not render identification objects collected before failure.
+        """
         information, seen, object_id = {}, set(), 0
         try:
             async with self.connection.operation() as (client, settings):
@@ -240,7 +279,14 @@ class ModbusCommandMixin:
         )
 
     async def write_values(self, kind, address, values):
-        """Issue one write and verify the returned function, address and values."""
+        """Return an appended acknowledgement for one validated write request.
+
+        One value selects a single-write function; multiple values select one
+        multi-write. Validate function/address and echoed value or count.
+        CommandError after submission marks the outcome unconfirmed; a matching
+        reply is not readback. Cancellation aborts the transport and states
+        whether submission began. Record attempted and acknowledged values.
+        """
         validate_write(kind, address, values)
         multiple = len(values) > 1
         suffix = "coils" if kind == "coils" else "registers"

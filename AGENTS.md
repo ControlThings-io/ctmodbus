@@ -4,12 +4,18 @@
 
 Read [docs/STATUS.md](docs/STATUS.md) for current work and validation gaps.
 Read [docs/DECISIONS.md](docs/DECISIONS.md) headings and entries relevant to the
-task; review D01–D08 together for cross-cutting architecture changes. Update
+task; include D01–D08 and D11–D12 for cross-cutting architecture changes. Update
 these files alongside meaningful changes using the global continuity guidance.
 
 Use uv and the checked-in lockfile. Python 3.11 is the baseline; CI covers
 Python 3.11–3.14 on Linux x86-64/ARM64, Windows, and macOS.
 The 0.x compatibility waiver applies only to the migration (D01).
+
+Until preparing the `1.0.0rc1` release, run ctmodbus and its tests with the
+adjacent ctui checkout by adding `--with-editable ../ctui` to `uv run`. This is
+a temporary development override: do not change the declared ctui dependency
+or lockfile merely to use the checkout. Release validation must omit the
+override and use the intended published PyPI version.
 
 ## Project constraints
 
@@ -28,11 +34,11 @@ boundaries. Expansion beyond the agreed feature set requires an actual task.
 
 ```bash
 uv sync --locked --python 3.11
-uv run ctmodbus
-uv run --python 3.11 python -m unittest discover -s tests -v
-uv run black --check src tests
-uv run isort --check-only src tests
-uv run pylint src/ctmodbus
+uv run --with-editable ../ctui ctmodbus
+uv run --python 3.11 --with-editable ../ctui python -m unittest discover -s tests -v
+uv run --with-editable ../ctui black --check src tests
+uv run --with-editable ../ctui isort --check-only src tests
+uv run --with-editable ../ctui pylint src/ctmodbus
 uv lock --check
 git diff --check
 uv build
@@ -57,4 +63,4 @@ Publishing requires release approval; pushing a version tag triggers publication
 - `tests/`: unittest coverage, local server fixture, distribution smoke test.
 - `.github/workflows/`: platform tests and tag-triggered publishing.
 - [MIGRATION.md](MIGRATION.md), [CHANGELOG.md](CHANGELOG.md), and the release
-  checklist describe migration scope, user-facing changes, and release gates.
+  checklist describe migration guidance, user-facing changes, and release gates.
