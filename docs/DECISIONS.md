@@ -194,7 +194,8 @@ order and duplicate names. Allow overlapping tags with a creation warning.
 Export deterministic versioned TOML, adding `.toml` when absent; validate
 imports completely and apply them atomically. Existing names require a
 collision-specific TUI confirmation or explicit `--replace`. Keep file
-operations within the tag command group as `tag export` and `tag import`.
+operations within the tag command group as `tag export` and `tag import`; both
+use ctui's shared path completer.
 
 Tagged I/O reuses the existing serialized read/write path, response checks,
 recording, cancellation, and uncertain-write reporting. Tag definitions are

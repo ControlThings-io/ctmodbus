@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ctui import CommandError, ConfirmationRequired
+from ctui import CommandError, ConfirmationRequired, PathCompleter
 
 from ctmodbus.app import ModbusApp
 from ctmodbus.tags import (
@@ -225,6 +225,13 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("--replace", messages[0])
         result = await self.app.dispatch(f"tag import {exported} --replace")
         self.assertIn("Imported 1 tags", result.output)
+
+    def test_import_and_export_use_path_completion(self):
+        """Expose ctui filesystem suggestions on both tag-file path arguments."""
+        for name in ("tag import", "tag export"):
+            with self.subTest(command=name):
+                completer = self.app.commands[name].arguments["path"].completer
+                self.assertIsInstance(completer, PathCompleter)
 
     async def test_import_is_validated_before_changes(self):
         """Ensure one malformed definition prevents every imported tag from being saved."""

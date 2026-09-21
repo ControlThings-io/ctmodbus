@@ -18,7 +18,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from ctui import Argument, CommandError, CommandResult, IntegerRanges, command
+from ctui import (
+    Argument,
+    CommandError,
+    CommandResult,
+    IntegerRanges,
+    PathCompleter,
+    command,
+)
 from tabulate import tabulate
 
 from ctmodbus.formatting import timestamp
@@ -650,7 +657,12 @@ class TagCommandMixin:
             f"{result.output}"
         )
 
-    @command(name="tag export")
+    @command(
+        name="tag export",
+        arguments={
+            "path": Argument(help="Destination TOML file", completer=PathCompleter())
+        },
+    )
     async def tag_export(self, path: Path):
         """Write name-sorted project tags to PATH and return destination text.
 
@@ -677,7 +689,10 @@ class TagCommandMixin:
 
     @command(
         name="tag import",
-        arguments={"replace": Argument(flags=("--replace",))},
+        arguments={
+            "path": Argument(help="TOML tag file to import", completer=PathCompleter()),
+            "replace": Argument(flags=("--replace",)),
+        },
     )
     async def tag_import(self, path: Path, replace: bool = False):
         """Validate PATH and merge tags, returning the imported count as text.

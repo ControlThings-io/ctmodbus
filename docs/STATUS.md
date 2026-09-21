@@ -24,7 +24,8 @@ import/export command rename. Working tree was clean at task start.
   This documentation audit does not resolve those runtime issues.
 - Tag TOML commands are grouped with the other tag-management commands as
   `tag export` and `tag import`; the unreleased `export tags` and `import tags`
-  spellings are not retained as aliases.
+  spellings are not retained as aliases. Both path arguments use the shared
+  ctui path completer from the adjacent development checkout.
 
 ## Next steps and validation gaps
 
@@ -66,8 +67,9 @@ release readiness lacks final-revision and manual/remote validation.
   All 40 focused command/tag/discovery tests passed; local Markdown links and
   anchors checked. Full transport/matrix and artifact checks were not rerun for
   this documentation-only change.
-- September 21 tag command rename on `cf3fb59`: all 10 focused tag tests passed
-  on Python 3.11 using the adjacent editable ctui checkout.
+- September 21 tag command rename and shared path-completer integration on
+  `cf3fb59`: all 11 focused tag tests passed on Python 3.11 using the adjacent
+  editable ctui checkout.
 
 ## Audit source coverage
 

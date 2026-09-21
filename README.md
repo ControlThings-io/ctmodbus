@@ -136,8 +136,9 @@ list to read only those tags while preserving the requested order and duplicates
 
 Tag files are versioned TOML. Export appends `.toml` when absent and replaces
 the destination atomically. Import validates the whole file before changing the
-project. Existing names trigger a TUI confirmation; CLI and command-file use
-report the conflicting names and require `--replace`.
+project. Both commands suggest filesystem paths in the TUI. Existing names
+trigger a TUI confirmation; CLI and command-file use report the conflicting
+names and require `--replace`.
 
 Tag imports and exports currently assume sequential use. See the
 [documented concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
