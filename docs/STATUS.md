@@ -1,7 +1,8 @@
 # Project status
 
-Last reconciled: 2026-09-20, `dev-v1.0.0` at `4e34098`, plus the uncommitted tag
-feature described below. Working tree was clean at task start.
+Last reconciled: 2026-09-20, `dev-v1.0.0` at `5eb04ee`, plus the uncommitted
+serial-completion enhancement described below. Working tree was clean at task
+start.
 
 ## Current state
 
@@ -10,7 +11,10 @@ feature described below. Working tree was clean at task start.
 - Package version is `1.0.0rc1`; `ctui==1.0.0rc1` and
   `pymodbus[serial]>=3.15.0,<3.16` (locked to 3.15.0); Python >=3.11,<4.
 - Project-scoped typed tags are implemented with persistence, tagged reads and
-  writes, endian-aware integer/float codecs, and atomic TOML exchange (D11).
+  writes, endian-aware integer/float codecs, and atomic TOML exchange (D11),
+  committed at `5eb04ee`.
+- Serial-device completion now shows USB manufacturer and product metadata when
+  the operating system provides it, with the device description as fallback.
 - The owner confirmed on September 18 that RC1 was unpublished. No local
   `v1.0.0rc1` tag exists; changelog remains Unreleased. Remote refs, PRs,
   publication state, and CI results were not refreshed for this review.
@@ -53,8 +57,12 @@ manager, typing-marker ideas, and release plans are not ctmodbus commitments.
 - September 20 documentation edits on `d0e45e5`: content and local Markdown
   links reviewed; `git diff --check` passed. Runtime tests not run because no
   runtime or packaging behavior changed.
-- September 20 tag implementation on `4e34098`: 53 tests passed on Python 3.11,
+- September 20 tag implementation based on `4e34098`, subsequently committed at
+  `5eb04ee`: 53 tests passed on Python 3.11,
   including TCP/UDP, PTY serial, TLS, tag codecs/storage/I/O/import/export, and
   project isolation. Black, isort, pylint, lock, and whitespace checks passed;
   wheel and sdist builds and isolated installed-artifact smoke tests passed.
   Remote CI and manual terminal/hardware checks remain outstanding.
+- September 20 serial-completion enhancement on `5eb04ee`: 30 focused discovery
+  and command tests passed on Python 3.11; black, isort, pylint, and whitespace
+  checks passed. Physical ports and terminal rendering remain to be checked.

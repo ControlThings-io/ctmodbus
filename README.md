@@ -55,9 +55,11 @@ close
 ```
 
 These examples show alternative connections: close the current session before
-opening another. Serial-device discovery is advisory; device paths and symlinks
-can be supplied even if enumeration does not list them. UDP opening establishes
-a local socket and does not prove that a remote Modbus device is present.
+opening another. Serial-device completion shows the USB manufacturer and product
+beside each device path when the operating system provides them. Discovery is
+advisory; device paths and symlinks can be supplied even if enumeration does not
+list them. UDP opening establishes a local socket and does not prove that a
+remote Modbus device is present.
 
 Addresses are **zero-based wire addresses**, from 0 through 65535, rather than
 4xxxx reference numbers. Ranges are inclusive and preserve input order and

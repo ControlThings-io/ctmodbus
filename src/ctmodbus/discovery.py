@@ -3,6 +3,7 @@
 import asyncio
 
 import psutil
+from ctui import CompletionItem
 from serial.tools.list_ports import comports
 from tabulate import tabulate
 
@@ -14,7 +15,13 @@ def serial_devices():
 
 async def complete_serial(_context):
     """ctui async completion provider; discovery is advisory, not a restriction."""
-    return [item.device for item in await asyncio.to_thread(serial_devices)]
+    results = []
+    for item in await asyncio.to_thread(serial_devices):
+        details = [value for value in (item.manufacturer, item.product) if value]
+        if not details and item.description and item.description != item.device:
+            details.append(item.description)
+        results.append(CompletionItem(item.device, " — ".join(details)))
+    return results
 
 
 def suggestions():
