@@ -650,8 +650,8 @@ class TagCommandMixin:
             f"{result.output}"
         )
 
-    @command(name="export tags")
-    async def export_tags(self, path: Path):
+    @command(name="tag export")
+    async def tag_export(self, path: Path):
         """Write name-sorted project tags to PATH and return destination text.
 
         Append .toml unless the existing suffix matches case-insensitively.
@@ -676,10 +676,10 @@ class TagCommandMixin:
         return f"Exported tags to {path}."
 
     @command(
-        name="import tags",
+        name="tag import",
         arguments={"replace": Argument(flags=("--replace",))},
     )
-    async def import_tags(self, path: Path, replace: bool = False):
+    async def tag_import(self, path: Path, replace: bool = False):
         """Validate PATH and merge tags, returning the imported count as text.
 
         Reject existing names unless replace=True. TUI confirmation is prepared

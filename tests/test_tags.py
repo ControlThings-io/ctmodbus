@@ -201,16 +201,16 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         """Round-trip TOML and verify collision rejection, declined prompts, and replace."""
         await self.app.dispatch("tag create timer holding_register 2 int32")
         path = Path(self.directory.name) / "my_tags"
-        result = await self.app.dispatch(f"export tags {path}")
+        result = await self.app.dispatch(f"tag export {path}")
         exported = path.with_suffix(".toml")
         self.assertTrue(exported.is_file())
         self.assertIn('word_order = "little"', exported.read_text(encoding="utf-8"))
         await self.app.dispatch("tag delete timer")
-        await self.app.dispatch(f"import tags {exported}")
+        await self.app.dispatch(f"tag import {exported}")
         self.assertEqual((await self.app.tags.get("timer")).count, 2)
 
         with self.assertRaisesRegex(ConfirmationRequired, "timer"):
-            await self.app.dispatch(f"import tags {exported}")
+            await self.app.dispatch(f"tag import {exported}")
         messages = []
 
         async def decline(message):
@@ -219,11 +219,11 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             return False
 
         result = await self.app.dispatch(
-            f"import tags {exported}", confirm_callback=decline
+            f"tag import {exported}", confirm_callback=decline
         )
         self.assertFalse(result.accepted)
         self.assertIn("--replace", messages[0])
-        result = await self.app.dispatch(f"import tags {exported} --replace")
+        result = await self.app.dispatch(f"tag import {exported} --replace")
         self.assertIn("Imported 1 tags", result.output)
 
     async def test_import_is_validated_before_changes(self):
@@ -237,5 +237,5 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8",
         )
         with self.assertRaisesRegex(CommandError, "Invalid tag 'bad'"):
-            await self.app.dispatch(f"import tags {path}")
+            await self.app.dispatch(f"tag import {path}")
         self.assertEqual(await self.app.tags.list(), [])

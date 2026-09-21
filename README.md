@@ -98,8 +98,8 @@ write tag state 0b0111_0001
 write tag pause_sw on
 tag rename timer duration
 tag delete duration
-export tags my_tags
-import tags my_tags.toml
+tag export my_tags
+tag import my_tags.toml
 ```
 
 Types are `bool`, signed and unsigned 8-, 16-, 32-, and 64-bit integers, and

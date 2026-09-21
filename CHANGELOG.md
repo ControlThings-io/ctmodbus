@@ -5,7 +5,7 @@
 - Show USB manufacturer and product metadata in serial-device completions.
 - Add project-scoped typed tags with Boolean, signed/unsigned integer, and
   floating-point decoding; configurable byte/word order; tagged reads/writes;
-  and atomic TOML import/export.
+  and atomic TOML import/export through `tag export` and `tag import`.
 - Add `connect tls` with verified server certificates, custom CA roots, optional
   client identity, explicit insecure mode, and persisted TLS connection settings.
 

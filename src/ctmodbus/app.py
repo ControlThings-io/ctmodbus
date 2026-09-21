@@ -130,14 +130,14 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
     async def prepare_tag_import(self, text, tokens, kwargs):
         """Return (command_text, rejected_result_or_None) for tag import preflight.
 
-        For the exact ``import tags`` spelling without --replace, load the file
+        For the exact ``tag import`` spelling without --replace, load the file
         and current names. A synchronous/coroutine confirm_callback can approve
         replacement or return a rejected result; absent callbacks raise
         ConfirmationRequired listing collisions. Validation errors propagate.
         This preflight precedes dispatch guards and does not reserve the project
         or imported content while awaiting confirmation; see D12 discrepancies.
         """
-        if len(tokens) < 3 or tokens[:2] != ["import", "tags"]:
+        if len(tokens) < 3 or tokens[:2] != ["tag", "import"]:
             return text, None
         path_token = next(
             (token for token in tokens[2:] if not token.startswith("-")), None

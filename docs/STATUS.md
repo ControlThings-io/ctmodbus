@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-09-21, `dev-v1.0.0` at `4718ddd`, plus the uncommitted
-documentation audit. Working tree was clean at task start.
+Last reconciled: 2026-09-21, `dev-v1.0.0` at `cf3fb59`, plus the uncommitted tag
+import/export command rename. Working tree was clean at task start.
 
 ## Current state
 
@@ -22,6 +22,9 @@ documentation audit. Working tree was clean at task start.
 - Tag lifecycle, concurrency, and partial-output discrepancies are recorded in
   [D12](DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals).
   This documentation audit does not resolve those runtime issues.
+- Tag TOML commands are grouped with the other tag-management commands as
+  `tag export` and `tag import`; the unreleased `export tags` and `import tags`
+  spellings are not retained as aliases.
 
 ## Next steps and validation gaps
 
@@ -63,6 +66,8 @@ release readiness lacks final-revision and manual/remote validation.
   All 40 focused command/tag/discovery tests passed; local Markdown links and
   anchors checked. Full transport/matrix and artifact checks were not rerun for
   this documentation-only change.
+- September 21 tag command rename on `cf3fb59`: all 10 focused tag tests passed
+  on Python 3.11 using the adjacent editable ctui checkout.
 
 ## Audit source coverage
 
