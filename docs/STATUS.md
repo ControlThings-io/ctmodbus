@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-09-20, `dev-v1.0.0` at `d0e45e5`, plus the uncommitted
-documentation changes described below. Working tree was clean at task start.
+Last reconciled: 2026-09-20, `dev-v1.0.0` at `4e34098`, plus the uncommitted tag
+feature described below. Working tree was clean at task start.
 
 ## Current state
 
@@ -9,18 +9,18 @@ documentation changes described below. Working tree was clean at task start.
   `426048a`; `d0e45e5` added project instructions and continuity notes.
 - Package version is `1.0.0rc1`; `ctui==1.0.0rc1` and
   `pymodbus[serial]>=3.15.0,<3.16` (locked to 3.15.0); Python >=3.11,<4.
-- The owner confirmed on September 18 that RC1 was unpublished and feature work
-  was ongoing. The remaining feature list has not been supplied. No local
+- Project-scoped typed tags are implemented with persistence, tagged reads and
+  writes, endian-aware integer/float codecs, and atomic TOML exchange (D11).
+- The owner confirmed on September 18 that RC1 was unpublished. No local
   `v1.0.0rc1` tag exists; changelog remains Unreleased. Remote refs, PRs,
   publication state, and CI results were not refreshed for this review.
-- September 20 documentation changes separate personal/global instructions from
-  ctmodbus guidance, shorten this status, and retain task-relevant decisions.
-  Global instructions are machine-local and must be synchronized separately.
+- The global/project instruction split is committed at `4e34098`. Global
+  instructions are machine-local and must be synchronized separately.
 
 ## Next steps and validation gaps
 
-1. Obtain the owner's next feature task; deferred ideas below are not commitments.
-   Reconcile remote changes before integration or release work.
+1. Reconcile remote changes before integration or release work. Exercise tag
+   completion, collision confirmation, and typed output in a real terminal.
 2. After feature work, follow [RELEASE_CHECKLIST.md](../RELEASE_CHECKLIST.md) on
    the intended release revision: source/lockfile checks, wheel/sdist smoke
    tests, metadata review, and verified remote CI across all 16 combinations.
@@ -37,7 +37,7 @@ remote results and recorded manual hardware/terminal checks.
 
 ## Deferred scope
 
-Polling, tags, device cloning/simulation, proxies, raw/fuzzy requests, tunneling,
+Polling, device cloning/simulation, proxies, raw/fuzzy requests, tunneling,
 and historian integration remain deferred. TLS is complete. ctui's optional job
 manager, typing-marker ideas, and release plans are not ctmodbus commitments.
 
@@ -53,3 +53,8 @@ manager, typing-marker ideas, and release plans are not ctmodbus commitments.
 - September 20 documentation edits on `d0e45e5`: content and local Markdown
   links reviewed; `git diff --check` passed. Runtime tests not run because no
   runtime or packaging behavior changed.
+- September 20 tag implementation on `4e34098`: 53 tests passed on Python 3.11,
+  including TCP/UDP, PTY serial, TLS, tag codecs/storage/I/O/import/export, and
+  project isolation. Black, isort, pylint, lock, and whitespace checks passed;
+  wheel and sdist builds and isolated installed-artifact smoke tests passed.
+  Remote CI and manual terminal/hardware checks remain outstanding.

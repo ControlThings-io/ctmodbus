@@ -2,6 +2,9 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Add project-scoped typed tags with Boolean, signed/unsigned integer, and
+  floating-point decoding; configurable byte/word order; tagged reads/writes;
+  and atomic TOML import/export.
 - Add `connect tls` with verified server certificates, custom CA roots, optional
   client identity, explicit insecure mode, and persisted TLS connection settings.
 

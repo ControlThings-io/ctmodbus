@@ -50,6 +50,7 @@ Publishing requires release approval; pushing a version tag triggers publication
   records, progress, cancellation, and shutdown.
 - `src/ctmodbus/connection.py`: settings, client factory, serialization, timeouts.
 - `src/ctmodbus/operations.py`: typed reads/writes, chunking, response validation.
+- `src/ctmodbus/tags.py`: project tag storage, codecs, commands, and TOML exchange.
 - `src/ctmodbus/discovery.py`: advisory serial/local-service discovery.
 - `src/ctmodbus/formatting.py`: timestamps and safe result rendering.
 - `src/ctmodbus/commands.py`: application entry point.

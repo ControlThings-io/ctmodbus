@@ -1,15 +1,25 @@
 """Application ownership and ctui lifecycle integration."""
 
 import asyncio
+import shlex
 from dataclasses import replace
 from importlib.metadata import version
+from pathlib import Path
 from typing import Literal
 
-from ctui import Argument, CommandError, CommandResult, CtuiApp, command
+from ctui import (
+    Argument,
+    CommandError,
+    CommandResult,
+    ConfirmationRequired,
+    CtuiApp,
+    command,
+)
 
 from ctmodbus.connection import Connection, ConnectionSettings, create_client
 from ctmodbus.discovery import complete_serial, suggestions
 from ctmodbus.operations import ModbusCommandMixin
+from ctmodbus.tags import TagCommandMixin, TagStore, parse_tag_document
 
 NETWORK_ARGUMENTS = {
     name: Argument(flags=(f"--{name}",))
@@ -42,7 +52,7 @@ async def complete_profiles(context):
     return list(await context.app.configs.list())
 
 
-class ModbusApp(ModbusCommandMixin, CtuiApp):
+class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
     """A Modbus client with one connection and project-scoped services."""
 
     name = "ctmodbus"
@@ -50,10 +60,13 @@ class ModbusApp(ModbusCommandMixin, CtuiApp):
     description = "An asynchronous Modbus tool for device testing"
     prompt = "ctmodbus> "
     app_id = "io.controlthings.ctmodbus"
+    project_schema_version = 2
+    project_migrations = {1: (TagStore.CREATE,)}
 
     def __init__(self, *, client_factory=create_client, **kwargs):
         super().__init__(**kwargs)
         self.connection = Connection(client_factory)
+        self.tags = TagStore(self.backend)
         self.statusbar = self.connection_status
         self._device_dispatches = set()
         self._project_changing = False
@@ -94,7 +107,47 @@ class ModbusApp(ModbusCommandMixin, CtuiApp):
         if hasattr(self, "app"):
             self.app.invalidate()
 
-    async def dispatch(self, text, **kwargs):  # pylint: disable=too-many-branches
+    async def prepare_tag_import(self, text, tokens, kwargs):
+        """Prompt for project-specific tag collisions and return command text."""
+        if len(tokens) < 3 or tokens[:2] != ["import", "tags"]:
+            return text, None
+        path_token = next(
+            (token for token in tokens[2:] if not token.startswith("-")), None
+        )
+        if path_token is None or "--replace" in tokens:
+            return text, None
+        imported = parse_tag_document(Path(path_token).expanduser())
+        collisions = sorted({tag.name for tag in imported} & await self.tags.names())
+        if not collisions:
+            return text, None
+        message = (
+            "Tags already exist: "
+            + ", ".join(collisions)
+            + ". Overwrite them? Re-run with --replace to overwrite without "
+            "prompting."
+        )
+        callback = kwargs.get("confirm_callback")
+        if callback is None:
+            raise ConfirmationRequired(message)
+        approved = callback(message)
+        if asyncio.iscoroutine(approved):
+            approved = await approved
+        return (
+            (text + " --replace", None)
+            if approved
+            else (text, CommandResult.rejected())
+        )
+
+    # Lifecycle arbitration is intentionally centralized around command dispatch.
+    async def dispatch(  # pylint: disable=too-many-branches,too-many-statements
+        self, text, **kwargs
+    ):
+        tokens = shlex.split(text)
+        # Collision names require reading both the file and active project.
+        text, rejected = await self.prepare_tag_import(text, tokens, kwargs)
+        if rejected is not None:
+            return rejected
+
         # Reserve project transitions before the first await. This also covers
         # unique command prefixes, which are resolved to their canonical names.
         item, _ = self.commands.resolve(text)
@@ -150,6 +203,8 @@ class ModbusApp(ModbusCommandMixin, CtuiApp):
                 # recording session open; finish it in its original project.
                 await self.finish_record_session()
             result = await super().dispatch(text, **kwargs)
+            if item.name == "project reset" and "all" in tokens and result.accepted:
+                await self.tags.clear()
             warnings = self._record_warnings.get(task)
             if warnings:
                 result = replace(

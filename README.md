@@ -7,6 +7,8 @@ An asynchronous Modbus tool for device testing, built with
 The 1.0 release candidate supports TCP, UDP, TLS, serial RTU, and serial ASCII;
 device identification; coils, discrete inputs, input registers, and holding
 registers; and single/multiple coil and holding-register writes.
+Project-scoped tags add names and integer, floating-point, or Boolean types to
+those wire addresses.
 
 ## Installation
 
@@ -69,6 +71,69 @@ request (at most 1,968 coils or 123 registers). Writes never split automatically
 Success means the device returned a matching acknowledgement, not an independent
 readback. Failed or interrupted writes may have reached the device; an
 unconfirmed outcome is reported explicitly.
+
+## Tags
+
+Tags give device addresses project-scoped names and types. The type determines
+the number of addresses, so creation takes only the first zero-based address.
+Tags use the active connection and unit; they do not store a host, unit, or
+connection profile.
+
+```text
+tag create pause_sw coil 0 bool
+tag create state holding_register 0 uint8
+tag create counter holding_register 1 uint16
+tag create timer holding_register 2 int32
+tag create energy input_register 10 float64 --word-order big
+tag list
+tag show timer
+read tags
+read tags pause_sw,state,counter,timer
+write tag timer 0d33_000
+write tag timer 0x8000_0000
+write tag timer -- -2_000_000_000
+write tag state 0b0111_0001
+write tag pause_sw on
+tag rename timer duration
+tag delete duration
+export tags my_tags
+import tags my_tags.toml
+```
+
+Types are `bool`, signed and unsigned 8-, 16-, 32-, and 64-bit integers, and
+32- or 64-bit floating point. Integer input accepts signed decimal values and
+`0b`, `0o`, `0d`, or `0x` radix prefixes; underscores are allowed. Boolean input
+accepts `0`/`1`, `false`/`true`, and `off`/`on`. Floating input accepts finite
+decimal or scientific notation; NaN and infinity are rejected.
+
+For signed integer tags, unsigned binary, octal, or hexadecimal literals are
+interpreted as fixed-width bit patterns: `0x8000_0000` is `-2147483648` for an
+`int32`, and `0xFFFF_FFFF` is `-1`. Decimal input remains numeric and must fit
+the declared range. Place ctui's `--` end-of-options marker before a negative
+positional value, as in `write tag timer -- -2000000000`.
+
+Register tags default to Modbus-standard big-endian byte order inside each
+16-bit register and little-endian word order across registers. Override these
+with `--byte-order little|big` and `--word-order little|big`. An 8-bit value
+occupies the selected byte and the unused byte is written as zero: big byte
+order places it in the low byte; little byte order places it in the high byte.
+Byte and word order do not apply to Boolean tags.
+
+`tag create` uses the singular table names `coil`, `discrete_input`,
+`input_register`, and `holding_register`. Coils and discrete inputs support
+`bool`; input and holding registers support numeric types. Writes are limited to
+coils and holding registers. Overlapping tags are allowed and reported when
+created because alternate interpretations can be useful. Tagged operations
+retain normal response validation, recording, cancellation, and uncertain-write
+reporting.
+
+`read tags` without names reads every tag in name order. Supply a comma-separated
+list to read only those tags while preserving the requested order and duplicates.
+
+Tag files are versioned TOML. Export appends `.toml` when absent and replaces
+the destination atomically. Import validates the whole file before changing the
+project. Existing names trigger a TUI confirmation; CLI and command-file use
+report the conflicting names and require `--replace`.
 
 All connections accept `--unit` (1–247), `--timeout` (seconds), and `--retries`
 (0–10). Defaults are unit 1, zero retries, and a timeout of 3 seconds for network
@@ -172,7 +237,7 @@ need hardware smoke testing.
 
 This is a breaking migration from 0.x. Legacy command spellings, space-separated
 multi-write values, host:port syntax, and old storage formats are not supported.
-Polling, tags, simulation, proxies, raw/fuzzy requests,
+Polling, simulation, proxies, raw/fuzzy requests,
 tunneling, and historian integration remain deferred.
 
 See [CHANGELOG.md](CHANGELOG.md), [MIGRATION.md](MIGRATION.md), and

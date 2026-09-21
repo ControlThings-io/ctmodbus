@@ -157,3 +157,37 @@ Keep STATUS focused on actionable state; Git preserves completed milestones and
 prior evidence reviews. Read relevant decisions on demand rather than requiring
 the entire log for every task. Retain technical boundaries and rationale so
 context savings do not depend on rediscovering correctness constraints.
+
+## D11 — Project-scoped typed tags
+
+Accepted and implemented, 2026-09-20.
+
+Tags map a project-local name to a Modbus table, first zero-based address, and
+type; the type derives the address count. They are independent of connection
+profiles, hosts, and unit IDs, and use whichever single connection is active.
+Support Boolean, signed/unsigned 8/16/32/64-bit integers, and IEEE 32/64-bit
+floats. Boolean tags use coils or discrete inputs; numeric tags use input or
+holding registers. Writes remain limited to coils and holding registers.
+
+Register tags default to big byte order within each 16-bit register and little
+word order across registers, with named options for both. Eight-bit values use
+one full register: big byte order puts the value in the low byte, little byte
+order in the high byte, and writes zero to the unused byte. This avoids an
+unsafe read-modify-write. Reject non-finite floats. Accept natural typed values
+and radix-prefixed integers without requiring ctui `HexBytes`. For signed types,
+interpret unsigned binary/octal/hex literals as fixed-width two's-complement bit
+patterns; signed and decimal literals retain their numeric meaning. Negative
+positional values use ctui's standard `--` end-of-options marker.
+
+Use comma-separated names for `read tags` to fit ctui's typed-list command
+model. Use singular table names in `tag create` because it accepts one starting
+address; persisted definitions retain canonical plural Modbus table names.
+With no names, read all tags in stable name order; otherwise preserve requested
+order and duplicate names. Allow overlapping tags with a creation warning.
+Export deterministic versioned TOML, adding `.toml` when absent; validate
+imports completely and apply them atomically. Existing names require a
+collision-specific TUI confirmation or explicit `--replace`.
+
+Tagged I/O reuses the existing serialized read/write path, response checks,
+recording, cancellation, and uncertain-write reporting. Tag definitions are
+included in whole-project snapshots and cleared by a full project reset.

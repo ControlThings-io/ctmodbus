@@ -55,8 +55,8 @@ class ModbusCommandMixin:
     async def record_operation(self, direction, decoded):
         """Overridden by the application to persist decoded protocol records."""
 
-    async def read_values(self, kind, addresses, max_count):
-        """Read ordered chunks and retain completed results on failure."""
+    async def read_values_data(self, kind, addresses, max_count):
+        """Read ordered chunks and return address/value pairs."""
         chunks = list(read_chunks(addresses, max_count, READ_LIMITS[kind]))
         results = []
         try:
@@ -135,6 +135,11 @@ class ModbusCommandMixin:
             raise CommandError(self.partial_read(kind, results, str(error))) from error
         finally:
             await self.events.emit("modbus_progress", completed=0, total=0)
+        return results
+
+    async def read_values(self, kind, addresses, max_count):
+        """Read ordered chunks and format the completed values."""
+        results = await self.read_values_data(kind, addresses, max_count)
         return CommandResult.append(
             f"{timestamp()} Read {kind}\n{format_values(kind, results)}"
         )
