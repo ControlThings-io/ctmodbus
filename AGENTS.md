@@ -30,6 +30,11 @@ configs for profiles and records for decoded operations; never persist live
 clients/tasks. Preserve the policies in the decision log when changing these
 boundaries. Expansion beyond the agreed feature set requires an actual task.
 
+Give every new positional `@command` argument a brief, meaningful
+`Argument.help` message. Keep this generic argument help out of repeated
+completion rows; when individual choices need distinct explanations, use the
+choices mapping or explicit `CompletionItem` help instead.
+
 ## Commands and verification
 
 ```bash
