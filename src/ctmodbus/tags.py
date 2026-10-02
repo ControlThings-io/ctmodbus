@@ -13,8 +13,10 @@ import json
 import math
 import os
 import re
+import sqlite3
 import struct
 import tomllib
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -266,35 +268,40 @@ class TagStore:
     async def import_all(self, tags, *, replace=False):
         """Commit prevalidated tags in one transaction and return None.
 
-        Caller must validate every definition and settle replacement policy
-        before calling. SQL errors roll back all rows and propagate. The later
-        metadata touch is separate from the committed transaction. Cancellation
-        is not caught by the ordinary-exception rollback handler.
+        Use a separate SQLite connection so unrelated ctui commits cannot
+        commit partial imports. Apply a short synchronous transaction without
+        cancellation checkpoints; all rows commit or roll back together. Reject
+        a busy database immediately rather than blocking the event loop.
+        Caller guards project switching and confirms replacement policy.
+        Metadata touch follows the data commit.
         """
+        for tag in tags:
+            tag.validate()
         await self.ensure()
+        cursor = await self.backend.connection.execute("PRAGMA database_list")
+        databases = await cursor.fetchall()
+        path = next(row[2] for row in databases if row[1] == "main")
         sql = (
             "INSERT OR REPLACE INTO tags VALUES (?, ?, ?, ?, ?, ?)"
             if replace
             else "INSERT INTO tags VALUES (?, ?, ?, ?, ?, ?)"
         )
-        await self.backend.connection.execute("BEGIN")
-        try:
-            for tag in tags:
-                await self.backend.connection.execute(
+        with closing(sqlite3.connect(path, timeout=0)) as connection:
+            with connection:
+                connection.executemany(
                     sql,
-                    (
-                        tag.name,
-                        tag.table,
-                        tag.address,
-                        tag.type,
-                        tag.byte_order,
-                        tag.word_order,
-                    ),
+                    [
+                        (
+                            tag.name,
+                            tag.table,
+                            tag.address,
+                            tag.type,
+                            tag.byte_order,
+                            tag.word_order,
+                        )
+                        for tag in tags
+                    ],
                 )
-            await self.backend.connection.commit()
-        except Exception:
-            await self.backend.connection.rollback()
-            raise
         await self.backend.touch()
 
 
@@ -723,12 +730,15 @@ class TagCommandMixin:
     async def tag_import(self, path: Path, replace: bool = False):
         """Validate PATH and merge tags, returning the imported count as text.
 
-        Reject existing names unless replace=True. TUI confirmation is prepared
-        separately by ModbusApp.prepare_tag_import; direct calls never prompt.
-        The file is reread here. Ordinary SQL failures roll back imported rows;
-        cancellation and project races are documented as open discrepancies.
+        Dispatch supplies validated, confirmed data for the current task and
+        guards project/tag mutations. Direct calls validate the file and never
+        prompt; callers must coordinate project changes themselves.
         """
-        tags = parse_tag_document(path)
+        prepared = self._prepared_tag_imports.get(asyncio.current_task())
+        if prepared is None:
+            tags = parse_tag_document(path.expanduser())
+        else:
+            tags, replace = prepared
         collisions = sorted({tag.name for tag in tags} & await self.tags.names())
         if collisions and not replace:
             raise CommandError(

@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-02, `dev-v1.0.0` based on `6fd5c21`, with local
-multi-tag read serialization and partial-output changes.
+Last reconciled: 2026-10-02, `dev-v1.0.0` based on `920daa0`, with local
+prepared tag-import and transaction-safety changes.
 
 ## Current state
 
@@ -19,9 +19,8 @@ multi-tag read serialization and partial-output changes.
 - The September 21 audit updates global documentation ownership rules, expands
   contracts throughout all 16 project Python files, and reconciles all seven
   Markdown files. Global instructions need separate synchronization per machine.
-- Tag lifecycle, concurrency, and partial-output discrepancies are recorded in
+- Resolved and remaining tag lifecycle/concurrency discrepancies are recorded in
   [D12](DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals).
-  This documentation audit does not resolve those runtime issues.
 - Tag TOML commands are grouped with the other tag-management commands as
   `tag export` and `tag import`; the unreleased `export tags` and `import tags`
   spellings are not retained as aliases. Both path arguments use the shared
@@ -29,9 +28,10 @@ multi-tag read serialization and partial-output changes.
 
 ## Next steps and validation gaps
 
-1. Address D12's remaining tag-import confirmation/transaction/project isolation
-   gaps with focused regressions. Multi-tag serialization/partial output is fixed;
-   adjacent-read batching remains future work.
+1. Multi-tag serialization/partial output and tag-import confirmation, atomic
+   application, and project isolation are fixed. Remaining D12 items include
+   reset integration and optional file-I/O/export improvements; adjacent-read
+   batching remains future work. These are not release feature commitments.
    ctui enhancements listed there remain proposals, not dependency commitments.
 2. Exercise tag completion, collision confirmation, and typed output in a real
    terminal; verify USB metadata on physical serial ports.
@@ -49,6 +49,14 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 2 prepared tag-import changes on `920daa0` plus the working-tree diff:
+  all 66 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
+  Regressions cover changed files during confirmation, project/tag guards,
+  in-flight edits, cancellation before application, and all-row SQL rollback.
+  Black, isort, pylint (10.00/10), lockfile and whitespace checks passed; wheel
+  and sdist builds passed. Dependency metadata remains unchanged. Physical
+  serial hardware and remote platform CI were not checked.
 
 - October 2 multi-tag read changes on `6fd5c21` plus the working-tree diff:
   all 61 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.

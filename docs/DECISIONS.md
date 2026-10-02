@@ -216,14 +216,16 @@ Audit findings, 2026-09-21, against `4718ddd`; unresolved, not new accepted poli
   completed decoded rows on later failure/cancellation. A shared reserved-read
   helper preserves response checks and raw operation records. Adjacent-read
   batching remains unimplemented; device values can change between requests.
-- `ModbusApp.prepare_tag_import` runs before lifecycle guards, matches only the
-  full command spelling, and rereads the file after confirmation. Tag commands
-  are not in the device-task guard set. Concurrent project changes or modified
-  import files can therefore invalidate the state that was confirmed.
-- `TagStore.import_all` rolls back ordinary exceptions, but cancellation bypasses
-  that handler. Other services share its SQL connection and can commit during
-  awaits; atomic imports depend on noninterleaving use. Full reset clears the tag
-  table in a separate step after ctui's reset, rather than one transaction.
+- Resolved 2026-10-02: import dispatch reserves the active project and tag edits
+  before confirmation, using ctui argument parsing (including command prefixes).
+  It retains validated content per task and applies that exact content. Concurrent
+  tag edits/project changes are rejected; cancellation releases the guard.
+- Import applies all rows in a short synchronous transaction on a separate SQLite
+  connection, with no cancellation checkpoints during the transaction and no
+  busy wait. This prevents ctui's shared-connection commits from exposing partial
+  imports. Cancellation before application leaves tags untouched; after commit
+  all imported rows remain. Metadata touch is still separate. Full reset still
+  clears the tag table separately after ctui's reset.
 - Tag file reads/writes run synchronously on the event loop. Export uses a fixed
   `.tmp` sibling, so atomic destination replacement is not concurrent-export
   safety. Import has no file-size limit.

@@ -9,7 +9,6 @@ import asyncio
 import shlex
 from dataclasses import replace
 from importlib.metadata import version
-from pathlib import Path
 from typing import Literal
 
 from ctui import (
@@ -87,6 +86,9 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         self.statusbar = self.connection_status
         self._device_dispatches = set()
         self._project_changing = False
+        self._tag_import_task = None
+        self._tag_mutations = set()
+        self._prepared_tag_imports = {}
         self._closing = False
         self._opening = False
         self._stopping = False
@@ -127,44 +129,39 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         if hasattr(self, "app"):
             self.app.invalidate()
 
-    async def prepare_tag_import(self, text, tokens, kwargs):
-        """Return (command_text, rejected_result_or_None) for tag import preflight.
+    async def prepare_tag_import(self, text, kwargs):
+        """Prepare exact import data under the dispatch project/tag guard.
 
-        For the exact ``tag import`` spelling without --replace, load the file
-        and current names. A synchronous/coroutine confirm_callback can approve
-        replacement or return a rejected result; absent callbacks raise
-        ConfirmationRequired listing collisions. Validation errors propagate.
-        This preflight precedes dispatch guards and does not reserve the project
-        or imported content while awaiting confirmation; see D12 discrepancies.
+        Use ctui parsing, including unique command prefixes and end-of-options.
+        Confirm collisions against validated data, then retain that data for this
+        task. The import command consumes it without rereading the file.
         """
-        if len(tokens) < 3 or tokens[:2] != ["tag", "import"]:
-            return text, None
-        path_token = next(
-            (token for token in tokens[2:] if not token.startswith("-")), None
-        )
-        if path_token is None or "--replace" in tokens:
-            return text, None
-        imported = parse_tag_document(Path(path_token).expanduser())
+        item, arguments = self.commands.resolve(text)
+        values = item.parse_args(arguments)
+        imported = parse_tag_document(values["path"].expanduser())
+        replace_existing = values.get("replace", False)
         collisions = sorted({tag.name for tag in imported} & await self.tags.names())
-        if not collisions:
-            return text, None
-        message = (
-            "Tags already exist: "
-            + ", ".join(collisions)
-            + ". Overwrite them? Re-run with --replace to overwrite without "
-            "prompting."
+        if collisions and not replace_existing:
+            message = (
+                "Tags already exist: "
+                + ", ".join(collisions)
+                + ". Overwrite them? Re-run with --replace to overwrite "
+                "without prompting."
+            )
+            callback = kwargs.get("confirm_callback")
+            if callback is None:
+                raise ConfirmationRequired(message)
+            approved = callback(message)
+            if asyncio.iscoroutine(approved):
+                approved = await approved
+            if not approved:
+                return CommandResult.rejected()
+            replace_existing = True
+        self._prepared_tag_imports[asyncio.current_task()] = (
+            imported,
+            replace_existing,
         )
-        callback = kwargs.get("confirm_callback")
-        if callback is None:
-            raise ConfirmationRequired(message)
-        approved = callback(message)
-        if asyncio.iscoroutine(approved):
-            approved = await approved
-        return (
-            (text + " --replace", None)
-            if approved
-            else (text, CommandResult.rejected())
-        )
+        return None
 
     # Lifecycle arbitration is intentionally centralized around command dispatch.
     async def dispatch(  # pylint: disable=too-many-branches,too-many-statements
@@ -176,14 +173,10 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         and device work during opening, closing, or stopping. Attach recording
         warnings to success or CommandError without disguising acknowledged
         writes. Cancellation inside execution becomes CommandError. shlex errors
-        and preflight failures precede that boundary. Tag management/imports are
-        currently outside the device-task set; this is not a global command lock.
+        precede that boundary. Imports reserve the project and tag mutations across
+        confirmation and application; other commands remain available.
         """
         tokens = shlex.split(text)
-        # Collision names require reading both the file and active project.
-        text, rejected = await self.prepare_tag_import(text, tokens, kwargs)
-        if rejected is not None:
-            return rejected
 
         # Reserve project transitions before the first await. This also covers
         # unique command prefixes, which are resolved to their canonical names.
@@ -201,10 +194,22 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         task = asyncio.current_task()
         if self._stopping:
             raise CommandError("Application is stopping")
+        importing = item.name == "tag import"
+        tag_mutation = item.name in {
+            "tag create",
+            "tag rename",
+            "tag delete",
+            "tag import",
+        }
+        if self._tag_import_task is not None and (project_change or tag_mutation):
+            raise CommandError("Tag import is in progress; retry when it finishes")
+        if importing and self._tag_mutations:
+            raise CommandError("Tag edits are in progress; retry when they finish")
         if project_change:
             if (
                 self._project_changing
                 or self._device_dispatches
+                or self._tag_mutations
                 or self.connection.client is not None
                 or self._closing
             ):
@@ -234,7 +239,15 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
                 self._opening = False
                 raise CommandError("Connection is closing; retry when it finishes")
             self._device_dispatches.add(task)
+        if tag_mutation:
+            self._tag_mutations.add(task)
+        if importing:
+            self._tag_import_task = task
         try:
+            if importing:
+                rejected = await self.prepare_tag_import(text, kwargs)
+                if rejected is not None:
+                    return rejected
             if project_change:
                 # External task cancellation can leave an ended transport's
                 # recording session open; finish it in its original project.
@@ -261,6 +274,11 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
                 ) from error
             raise
         finally:
+            if tag_mutation:
+                self._tag_mutations.discard(task)
+            if importing:
+                self._prepared_tag_imports.pop(task, None)
+                self._tag_import_task = None
             if project_change:
                 self._project_changing = False
             if device_command:
@@ -335,6 +353,10 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
     async def on_stop(self):
         """Reject new dispatches and await close_connection before backend closure."""
         self._stopping = True
+        importing = self._tag_import_task
+        if importing is not None and importing is not asyncio.current_task():
+            importing.cancel()
+            await asyncio.gather(importing, return_exceptions=True)
         await self.close_connection()
 
     @command(name="connect")

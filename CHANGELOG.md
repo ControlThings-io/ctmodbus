@@ -2,6 +2,9 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Import the exact confirmed tag data, guard project/tag changes during import,
+  and apply tag merges in an isolated all-or-none transaction.
+
 - Reserve the connection across multi-tag reads and preserve completed decoded
   results on failure or cancellation, identifying failed and unread tags.
 

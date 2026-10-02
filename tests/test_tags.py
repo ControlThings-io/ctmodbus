@@ -1,9 +1,11 @@
 """Typed tag persistence, conversion, I/O, and interchange tests."""
 
 import asyncio
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from ctui import CommandError, ConfirmationRequired, PathCompleter
 
@@ -314,6 +316,121 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("--replace", messages[0])
         result = await self.app.dispatch(f"tag import {exported} --replace")
         self.assertIn("Imported 1 tags", result.output)
+
+    async def test_import_uses_confirmed_data_and_guards_project(self):
+        """A changed file cannot change approved data; prefixes share the guard."""
+        await self.app.dispatch("tag create timer holding_register 2 uint16")
+        path = Path(self.directory.name) / "confirmed.toml"
+        path.write_text(
+            export_tag_document([Tag("timer", "holding_registers", 9, "uint16")])
+        )
+
+        async def approve(message):
+            """Try competing mutations and replace the file before approving."""
+            self.assertIn("timer", message)
+            for command in (
+                "project create other",
+                "tag delete timer",
+                "tag import missing.toml",
+            ):
+                with self.assertRaisesRegex(CommandError, "import is in progress"):
+                    await self.app.dispatch(command)
+            path.write_text(
+                export_tag_document([Tag("unexpected", "coils", 0, "bool")])
+            )
+            await self.app.dispatch("help tag import")
+            return True
+
+        await self.app.dispatch(f"tag imp {path}", confirm_callback=approve)
+        self.assertEqual((await self.app.tags.get("timer")).address, 9)
+        self.assertEqual(await self.app.tags.names(), {"timer"})
+        self.assertIsNone(self.app._tag_import_task)
+        self.assertEqual(self.app._prepared_tag_imports, {})
+        await self.app.dispatch("project create other")
+        self.assertEqual(await self.app.tags.names(), set())
+
+    async def test_import_rejects_an_inflight_tag_edit(self):
+        """Do not confirm against tags while an earlier edit is unfinished."""
+        started, release = asyncio.Event(), asyncio.Event()
+        save = self.app.tags.save
+
+        async def paused_save(tag):
+            """Suspend an existing tag creation before saving its row."""
+            started.set()
+            await release.wait()
+            await save(tag)
+
+        with patch.object(self.app.tags, "save", paused_save):
+            task = asyncio.create_task(self.app.dispatch("tag create new coil 0 bool"))
+            await asyncio.wait_for(started.wait(), 1)
+            try:
+                with self.assertRaisesRegex(CommandError, "Tag edits are in progress"):
+                    await self.app.dispatch("tag import missing.toml")
+                with self.assertRaises(CommandError):
+                    await self.app.dispatch("project create other")
+            finally:
+                release.set()
+                await task
+        self.assertEqual(await self.app.tags.names(), {"new"})
+
+    async def test_cancelled_import_confirmation_leaves_tags_unchanged(self):
+        """Cancellation releases the project guard without applying any data."""
+        await self.app.dispatch("tag create timer holding_register 2 uint16")
+        path = Path(self.directory.name) / "cancelled.toml"
+        path.write_text(
+            export_tag_document([Tag("timer", "holding_registers", 9, "uint16")])
+        )
+        started = asyncio.Event()
+
+        async def approve(message):
+            """Wait until the caller cancels the pending confirmation."""
+            started.set()
+            await asyncio.Event().wait()
+
+        task = asyncio.create_task(
+            self.app.dispatch(f"tag import {path}", confirm_callback=approve)
+        )
+        await asyncio.wait_for(started.wait(), 1)
+        task.cancel()
+        with self.assertRaisesRegex(CommandError, "cancelled"):
+            await task
+        self.assertEqual((await self.app.tags.get("timer")).address, 2)
+        self.assertIsNone(self.app._tag_import_task)
+        await self.app.dispatch("tag delete timer")
+
+    async def test_import_transaction_rolls_back_every_row(self):
+        """A later SQL constraint failure cannot leave earlier inserts committed."""
+        await self.app.dispatch("tag create existing coil 0 bool")
+        with self.assertRaises(sqlite3.IntegrityError):
+            await self.app.tags.import_all(
+                [Tag("new", "coils", 1, "bool"), Tag("existing", "coils", 2, "bool")]
+            )
+        # A framework commit afterward must not expose a partial import.
+        await self.app.backend.touch()
+        self.assertEqual(await self.app.tags.names(), {"existing"})
+        self.assertEqual((await self.app.tags.get("existing")).address, 0)
+
+    async def test_cancel_before_import_transaction_writes_nothing(self):
+        """Cancelling before the short transaction starts leaves no imported rows."""
+        await self.app.tags.ensure()
+        started = asyncio.Event()
+
+        async def wait_before_transaction():
+            """Expose a cancellation point before any data mutation."""
+            started.set()
+            await asyncio.Event().wait()
+
+        with patch.object(
+            self.app.tags, "ensure", AsyncMock(side_effect=wait_before_transaction)
+        ):
+            task = asyncio.create_task(
+                self.app.tags.import_all([Tag("new", "coils", 0, "bool")])
+            )
+            await asyncio.wait_for(started.wait(), 1)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        self.assertEqual(await self.app.tags.names(), set())
 
     def test_import_and_export_use_path_completion(self):
         """Expose ctui filesystem suggestions on both tag-file path arguments."""
