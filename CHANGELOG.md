@@ -2,6 +2,9 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Reserve the connection across multi-tag reads and preserve completed decoded
+  results on failure or cancellation, identifying failed and unread tags.
+
 - Show USB manufacturer and product metadata in serial-device completions.
 - Add project-scoped typed tags with Boolean, signed/unsigned integer, and
   floating-point decoding; configurable byte/word order; tagged reads/writes;

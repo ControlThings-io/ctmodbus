@@ -8,6 +8,7 @@ Byte order defaults to big within a word and word order to little across words.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import os
@@ -22,7 +23,7 @@ from ctui import (
     Argument,
     CommandError,
     CommandResult,
-    IntegerRanges,
+    IntegerSpan,
     PathCompleter,
     command,
 )
@@ -595,16 +596,24 @@ class TagCommandMixin:
         await self.tags.delete(name)
         return CommandResult.append(f"Deleted tag {name!r}")
 
-    @command(name="read tags", arguments={"names": Argument(completer=complete_tags)})
+    @command(
+        name="read tags",
+        arguments={
+            "names": Argument(
+                help="Comma-separated tag names; omit to read all",
+                completer=complete_tags,
+            )
+        },
+    )
     async def read_tags(self, names: list[str] | None = None):
         """Read all tags, or comma-separated names in the requested order.
 
         Resolve every name before I/O; None selects name-sorted project tags.
-        Empty selections and unknown names raise CommandError. Each tag gets a
-        separate read reservation, preserving explicit order and duplicates;
-        this is not a single snapshot. Return decoded and raw columns only after
-        all reads succeed. Earlier tag rows are currently lost on later failure;
-        read_values_data supplies only the failing tag's partial error output.
+        Empty selections and unknown names raise CommandError. Hold one
+        shared connection reservation across the complete selection. Preserve
+        explicit order and duplicates. On failure or cancellation, report the
+        failed tag and completed decoded rows; remaining tags are not attempted.
+        This serializes our commands but is not a device-wide atomic snapshot.
         """
         requested = names
         if requested is None:
@@ -613,24 +622,41 @@ class TagCommandMixin:
             raise CommandError("No tags are defined in the active project")
         tags = [await self.tags.get(name) for name in requested]
         rows = []
-        for tag in tags:
-            addresses = str(tag.address)
-            if tag.count > 1:
-                addresses += f"-{tag.stop - 1}"
-            result = await self.read_values_data(
-                tag.table,
-                IntegerRanges(addresses),
-                min(tag.count, 2000 if tag.type == "bool" else 125),
-            )
-            raw = [value for _, value in result]
-            rows.append(
-                (
-                    tag.name,
-                    decode_tag_value(tag, raw),
-                    tag.type,
-                    ",".join(f"0x{int(value):04X}" for value in raw),
+        tag = tags[0]
+        try:
+            async with self.connection.operation() as (client, settings):
+                for tag in tags:
+                    # Scalar tag widths are within the protocol request limits.
+                    result = await self.read_reserved_chunks(
+                        tag.table,
+                        [IntegerSpan(tag.address, tag.count)],
+                        client,
+                        settings,
+                    )
+                    raw = [value for _, value in result]
+                    rows.append(
+                        (
+                            tag.name,
+                            decode_tag_value(tag, raw),
+                            tag.type,
+                            ",".join(f"0x{int(value):04X}" for value in raw),
+                        )
+                    )
+        except (CommandError, asyncio.CancelledError) as error:
+            if isinstance(error, asyncio.CancelledError):
+                self.connection.abort()
+                message = "Read cancelled; connection closed"
+            else:
+                message = str(error)
+            output = f"Read tags failed at {tag.name!r}: {message}"
+            if rows:
+                output += f"\nPartial read: {len(rows)} tags completed\n" + tabulate(
+                    rows, headers=("Tag", "Value", "Type", "Raw")
                 )
-            )
+            remaining = len(tags) - len(rows) - 1
+            if remaining:
+                output += f"\n{remaining} remaining tags were not read"
+            raise CommandError(output) from error
         return CommandResult.append(
             f"{timestamp()} Read tags\n"
             + tabulate(rows, headers=("Tag", "Value", "Type", "Raw"))

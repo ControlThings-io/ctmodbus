@@ -1,5 +1,6 @@
 """Typed tag persistence, conversion, I/O, and interchange tests."""
 
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -191,6 +192,94 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         for name in ("sensed", "state", "switch", "timer"):
             self.assertIn(name, result.output)
         self.assertEqual(len(self.client.calls), 4)
+
+    async def test_multi_tag_order_duplicates_and_prevalidation(self):
+        """Preserve explicit order/repeats and reject unknown tags before I/O."""
+        await self.app.dispatch("tag create first holding_register 1 uint16")
+        await self.app.dispatch("tag create second holding_register 2 uint16")
+        await self.connect()
+        await self.app.dispatch("read tags second,first,second")
+        self.assertEqual([args["address"] for _, args in self.client.calls], [2, 1, 2])
+        self.client.calls.clear()
+        with self.assertRaises(CommandError):
+            await self.app.dispatch("read tags first,missing")
+        self.assertEqual(self.client.calls, [])
+
+    async def test_multi_tag_failure_preserves_completed_rows(self):
+        """Keep decoded rows and stop before later tags on a malformed reply."""
+        for name, address in (("first", 1), ("second", 2), ("third", 3)):
+            await self.app.dispatch(
+                f"tag create {name} holding_register {address} uint16"
+            )
+        await self.connect()
+        self.client.reply = lambda name, args: response(
+            function_code=3, registers=[42] if args["address"] == 1 else []
+        )
+        with self.assertRaises(CommandError) as caught:
+            await self.app.dispatch("read tags first,second,third")
+        output = str(caught.exception)
+        for text in (
+            "failed at 'second'",
+            "1 tags completed",
+            "first",
+            "42",
+            "1 remaining tags",
+        ):
+            self.assertIn(text, output)
+        self.assertEqual(len(self.client.calls), 2)
+        self.assertFalse(self.app.connection.lock.locked())
+        self.assertTrue(self.app.connection.connected)
+
+    async def test_multi_tag_read_holds_reservation(self):
+        """A queued raw read cannot execute between two tag requests."""
+        for name, address in (("first", 1), ("second", 2)):
+            await self.app.dispatch(
+                f"tag create {name} holding_register {address} uint16"
+            )
+        await self.connect()
+        self.client.gate = asyncio.Event()
+        tags = asyncio.create_task(self.app.dispatch("read tags first,second"))
+        await asyncio.wait_for(self.client.started.wait(), 1)
+        competitor = asyncio.create_task(self.app.dispatch("read holding_registers 9"))
+        await asyncio.sleep(0)
+        self.client.gate.set()
+        await asyncio.wait_for(asyncio.gather(tags, competitor), 2)
+        self.assertEqual([args["address"] for _, args in self.client.calls], [1, 2, 9])
+        self.assertEqual(self.client.peak, 1)
+
+    async def test_multi_tag_cancellation_preserves_completed_rows(self):
+        """Cancellation during the second tag retains the first and closes I/O."""
+        for name, address in (("first", 1), ("second", 2), ("third", 3)):
+            await self.app.dispatch(
+                f"tag create {name} holding_register {address} uint16"
+            )
+        await self.connect()
+        second_started = asyncio.Event()
+
+        def reply(name, args):
+            """Suspend the next request after the first tag succeeds."""
+            self.client.gate = asyncio.Event()
+            self.client.started = second_started
+            return response(function_code=3, registers=[42])
+
+        self.client.reply = reply
+        task = asyncio.create_task(self.app.dispatch("read tags first,second,third"))
+        await asyncio.wait_for(second_started.wait(), 1)
+        task.cancel()
+        with self.assertRaises(CommandError) as caught:
+            await asyncio.wait_for(task, 2)
+        output = str(caught.exception)
+        for text in (
+            "cancelled",
+            "failed at 'second'",
+            "first",
+            "42",
+            "1 tags completed",
+        ):
+            self.assertIn(text, output)
+        self.assertFalse(self.app.connection.connected)
+        self.assertFalse(self.app.connection.lock.locked())
+        self.assertEqual(len(self.client.calls), 2)
 
     async def test_read_all_requires_at_least_one_defined_tag(self):
         """Report an empty tag project before attempting any device read."""

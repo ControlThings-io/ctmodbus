@@ -212,11 +212,10 @@ model; any such association would be session-local and is not implemented.
 
 Audit findings, 2026-09-21, against `4718ddd`; unresolved, not new accepted policy.
 
-- D02's whole-operation serialization and D04's partial-read reporting do not
-  fully extend across a multi-tag read. `TagCommandMixin.read_tags` reserves one
-  tag at a time and discards earlier displayed rows on later failure. Earlier
-  planning suggested adjacent-read batching and retained completed tags; neither
-  is implemented. Stored raw records still contain completed exchanges.
+- Resolved 2026-10-02: multi-tag reads hold one operation reservation and retain
+  completed decoded rows on later failure/cancellation. A shared reserved-read
+  helper preserves response checks and raw operation records. Adjacent-read
+  batching remains unimplemented; device values can change between requests.
 - `ModbusApp.prepare_tag_import` runs before lifecycle guards, matches only the
   full command spelling, and rereads the file after confirmation. Tag commands
   are not in the device-task guard set. Concurrent project changes or modified

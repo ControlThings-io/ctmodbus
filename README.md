@@ -127,9 +127,11 @@ Byte and word order do not apply to Boolean tags.
 coils and holding registers. Overlapping tags are allowed and reported when
 created because alternate interpretations can be useful. Tagged operations
 retain normal response validation, recording, cancellation, and uncertain-write
-reporting. Multi-tag reads currently issue one request per tag; if a later tag
-fails, earlier values remain in operation records but are not included in the
-failed command's output.
+reporting. Multi-tag reads hold one connection reservation across the command,
+with one request per tag. Failure or cancellation preserves completed decoded
+rows, identifies the failed tag, and reports how many remaining tags were not
+read. Cancellation closes the connection; reconnect before further device I/O.
+This prevents command interleaving, not changes to device values between reads.
 
 `read tags` without names reads every tag in name order. Supply a comma-separated
 list to read only those tags while preserving the requested order and duplicates.

@@ -88,58 +88,67 @@ class ModbusCommandMixin:
         transport and becomes CommandError with the same partial results.
         """
         chunks = list(read_chunks(addresses, max_count, READ_LIMITS[kind]))
-        results = []
         try:
             async with self.connection.operation() as (client, settings):
-                for index, span in enumerate(chunks):
-                    request = {
-                        "operation": f"read_{kind}",
-                        "address": span.start,
-                        "count": span.count,
-                        "unit": settings.unit,
-                    }
-                    await self.record_operation("sent", request)
-                    response = await self.connection.request(
-                        getattr(client, f"read_{kind}"),
-                        address=span.start,
-                        count=span.count,
+                return await self.read_reserved_chunks(kind, chunks, client, settings)
+        except asyncio.CancelledError as error:
+            self.connection.abort()
+            raise CommandError("Read cancelled; connection closed") from error
+
+    async def read_reserved_chunks(self, kind, chunks, client, settings):
+        """Read validated chunks inside the caller's connection reservation.
+
+        Never acquire the connection lock here. Preserve completed raw values on
+        protocol failure; cancellation closes the transport. Record exchanges
+        and emit/reset chunk progress just as for ordinary range reads.
+        """
+        results = []
+        try:
+            for index, span in enumerate(chunks):
+                request = {
+                    "operation": f"read_{kind}",
+                    "address": span.start,
+                    "count": span.count,
+                    "unit": settings.unit,
+                }
+                await self.record_operation("sent", request)
+                response = await self.connection.request(
+                    getattr(client, f"read_{kind}"),
+                    address=span.start,
+                    count=span.count,
+                )
+                expected_function = {
+                    "coils": 1,
+                    "discrete_inputs": 2,
+                    "holding_registers": 3,
+                    "input_registers": 4,
+                }[kind]
+                if getattr(response, "function_code", None) != expected_function:
+                    raise CommandError("Read response has incorrect function")
+                attr = "bits" if kind in ("coils", "discrete_inputs") else "registers"
+                values = getattr(response, attr, None)
+                if (
+                    values is None
+                    or len(values) < span.count
+                    or (attr == "registers" and len(values) != span.count)
+                ):
+                    raise CommandError(
+                        f"Invalid {kind} response length at address {span.start}"
                     )
-                    expected_function = {
-                        "coils": 1,
-                        "discrete_inputs": 2,
-                        "holding_registers": 3,
-                        "input_registers": 4,
-                    }[kind]
-                    if getattr(response, "function_code", None) != expected_function:
-                        raise CommandError("Read response has incorrect function")
-                    attr = (
-                        "bits" if kind in ("coils", "discrete_inputs") else "registers"
-                    )
-                    values = getattr(response, attr, None)
-                    if (
-                        values is None
-                        or len(values) < span.count
-                        or (attr == "registers" and len(values) != span.count)
-                    ):
-                        raise CommandError(
-                            f"Invalid {kind} response length at address {span.start}"
-                        )
-                    values = values[
-                        : span.count
-                    ]  # Coil responses are padded to a byte.
-                    if any(
-                        not isinstance(value, (int, bool))
-                        or not 0 <= value <= (1 if attr == "bits" else 65535)
-                        for value in values
-                    ):
-                        raise CommandError(f"Invalid {kind} response values")
-                    results.extend(zip(range(span.start, span.stop), values))
-                    await self.record_operation(
-                        "received", {**request, "values": list(values)}
-                    )
-                    await self.events.emit(
-                        "modbus_progress", completed=index + 1, total=len(chunks)
-                    )
+                values = values[: span.count]  # Coil responses are padded to a byte.
+                if any(
+                    not isinstance(value, (int, bool))
+                    or not 0 <= value <= (1 if attr == "bits" else 65535)
+                    for value in values
+                ):
+                    raise CommandError(f"Invalid {kind} response values")
+                results.extend(zip(range(span.start, span.stop), values))
+                await self.record_operation(
+                    "received", {**request, "values": list(values)}
+                )
+                await self.events.emit(
+                    "modbus_progress", completed=index + 1, total=len(chunks)
+                )
         except asyncio.CancelledError as error:
             self.connection.abort()
             await self.record_operation(

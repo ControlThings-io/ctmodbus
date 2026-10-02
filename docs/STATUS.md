@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-09-21, `dev-v1.0.0` at `cf3fb59`, plus the uncommitted tag
-import/export command rename. Working tree was clean at task start.
+Last reconciled: 2026-10-02, `dev-v1.0.0` based on `6fd5c21`, with local
+multi-tag read serialization and partial-output changes.
 
 ## Current state
 
@@ -29,8 +29,9 @@ import/export command rename. Working tree was clean at task start.
 
 ## Next steps and validation gaps
 
-1. Review and address D12's tag-read partial output/serialization and tag-import
-   confirmation/transaction/project isolation gaps with focused regressions.
+1. Address D12's remaining tag-import confirmation/transaction/project isolation
+   gaps with focused regressions. Multi-tag serialization/partial output is fixed;
+   adjacent-read batching remains future work.
    ctui enhancements listed there remain proposals, not dependency commitments.
 2. Exercise tag completion, collision confirmation, and typed output in a real
    terminal; verify USB metadata on physical serial ports.
@@ -48,6 +49,15 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 2 multi-tag read changes on `6fd5c21` plus the working-tree diff:
+  all 61 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
+  Added regressions for whole-command serialization, partial failure,
+  cancellation, ordering/duplicates, and validation before I/O. Updated the
+  existing responsive-help test to request ctui's grouped `help read` page.
+  Black, isort, pylint (10.00/10), lockfile and whitespace checks passed.
+  Local TCP/UDP, PTY serial, TLS, and terminal tests ran; physical hardware and
+  remote platform CI were not checked. Dependency metadata remains unchanged.
 
 - Historical September 13 migration through `7914437`: 34 tests reported passing
   on Python 3.11 and 3.14, local TCP/UDP and PTY serial, quality/lock checks,
