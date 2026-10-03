@@ -65,6 +65,12 @@ Publishing requires release approval; pushing a version tag triggers publication
 - `src/ctmodbus/discovery.py`: advisory serial/local-service discovery.
 - `src/ctmodbus/formatting.py`: timestamps and safe result rendering.
 - `src/ctmodbus/commands.py`: application entry point.
+- `src/ctmodbus/server_config.py`: validated TOML server definitions.
+- `src/ctmodbus/simulation.py`: sparse emulation and transactional hook API.
+- `src/ctmodbus/server.py`: owned listeners, request routing and plain proxying.
+- `src/ctmodbus/server_commands.py`: CTUI configuration and server lifecycle.
+- `src/ctmodbus/data_state.py`: runtime read/write evidence views.
+- [docs/SERVER.md](docs/SERVER.md): server, proxy, configuration and hook contracts.
 - `tests/`: unittest coverage, local server fixture, distribution smoke test.
 - `.github/workflows/`: platform tests and tag-triggered publishing.
 - [MIGRATION.md](MIGRATION.md), [CHANGELOG.md](CHANGELOG.md), and the release

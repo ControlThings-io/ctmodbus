@@ -252,7 +252,7 @@ need hardware smoke testing.
 
 This is a breaking migration from 0.x. Legacy command spellings, space-separated
 multi-write values, host:port syntax, and old storage formats are not supported.
-Polling, simulation, proxies, raw/fuzzy requests,
+Polling, device cloning, MITM rules, raw/fuzzy requests,
 tunneling, and historian integration remain deferred.
 
 See [MIGRATION.md](MIGRATION.md) for the 0.x transition and
@@ -266,3 +266,22 @@ in module, class, and callable docstrings.
 
 Copyright Justin Searle. Licensed under the GNU General Public License,
 version 3 or later. See [LICENSE](LICENSE).
+## Serving and proxying
+
+ctmodbus can serve TCP, UDP, TLS, RTU and ASCII while maintaining an independent
+client connection. Configure sparse raw ranges or typed tags with static,
+random and sequence behavior, plus optional Python hooks. Server definitions
+can be assembled in CTUI or imported/exported as TOML.
+
+```text
+serve data import examples/device.toml
+serve tcp 127.0.0.1 --port 5020
+serve data show
+serve stop
+connect tcp 127.0.0.1 --port 502
+connect data show
+```
+
+`proxy enable` routes incoming server requests through the connected client;
+`proxy disable` restores local behavior. See [server and proxy usage](docs/SERVER.md)
+for all commands, foreground CLI serving, hooks, defaults and evidence semantics.

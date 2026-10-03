@@ -239,3 +239,36 @@ statistics; extensible reset sections. The comma-separated tag list removed the
 need for variadic CLI parameters. Keep these proposals separate from accepted
 Modbus semantics. Contract docstrings describe current behavior; resolving the
 discrepancies requires implementation work and regression checks.
+
+## D13 — Independent servers, sparse emulation, proxy routing and evidence views
+
+Accepted, 2026-10-03, from the owner-directed design in this session.
+
+Add one independent server alongside the existing single client. Support TCP,
+UDP, native TLS, RTU and ASCII, with local bind defaults 5020/8020. Serial serving
+is an addressed device, not a tap. Use shared CTUI dispatch and an explicit
+foreground option for long-running CLI serving. Stop/drain before project changes.
+
+Persist versioned server definitions in project configs, merge referenced shared
+project tags, and keep runtime data/observations separate. Defaults expose all
+four 0–65535 tables, false/zero; imported omitted tables are unavailable. Each
+configured table chooses illegal-unmapped or default-backed addresses. Raw ranges
+and typed tags support static, random and read/time sequence rules. Keep sparse
+values, coherent typed request samples, reproducible seeds and reset behavior.
+
+Use optional trusted companion Python hooks on_read/on_write/on_tick with a
+small decoded-tag get/set API. Request hook failures roll back pending state and
+return exception 04; tick failures retain prior state. Confirm differing project
+tag definitions, apply the exact confirmed data, and atomically store definitions
+and tags. Configuration must be stopped for edits; no dynamic rule language yet.
+
+Proxy enable requires both endpoints and zero upstream retries. Capture routing
+mode per request, preserve downstream transaction/unit identities, translate
+framing through PyModbus, serialize full upstream exchanges with console I/O,
+and forward exceptions without simulated fallback. Server-unit requests map to
+connection unit; unsupported functions return 01. Keep separate upstream and
+presented observations, distinguishing read evidence, write acknowledgement and
+uncertainty. Observations reset on fresh sessions and are not persisted. MITM
+request/response seams exist, but rules and separate MITM TOML remain deferred.
+
+The detailed command/config/hook contract is in [SERVER.md](SERVER.md).

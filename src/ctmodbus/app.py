@@ -21,8 +21,11 @@ from ctui import (
 )
 
 from ctmodbus.connection import Connection, ConnectionSettings, create_client
+from ctmodbus.data_state import DataState
 from ctmodbus.discovery import complete_serial, suggestions
 from ctmodbus.operations import ModbusCommandMixin
+from ctmodbus.server import Server
+from ctmodbus.server_commands import CONFIG_NAME, ServerCommandMixin
 from ctmodbus.tags import TagCommandMixin, TagStore, parse_tag_document
 
 NETWORK_ARGUMENTS = {
@@ -56,7 +59,9 @@ async def complete_profiles(context):
     return list(await context.app.configs.list())
 
 
-class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
+class ModbusApp(  # pylint: disable=too-many-public-methods
+    ServerCommandMixin, TagCommandMixin, ModbusCommandMixin, CtuiApp
+):
     """A Modbus client with one connection and project-scoped services.
 
     Open the backend before direct dispatch, or use run/run_cli for managed
@@ -83,6 +88,10 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         super().__init__(**kwargs)
         self.connection = Connection(client_factory)
         self.tags = TagStore(self.backend)
+        self.server = Server(self)
+        self.client_state = DataState()
+        self._server_edit_task = None
+        self._prepared_server_imports = {}
         self.statusbar = self.connection_status
         self._device_dispatches = set()
         self._project_changing = False
@@ -118,7 +127,10 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
             if self.backend and self.backend.current
             else "unopened"
         )
-        return f"Project: {project} | {state}{self._progress}"
+        return (
+            f"Project: {project} | {state}{self._progress} | "
+            f"Server: {self.server.label}"
+        )
 
     def update_progress(self, completed, total):
         """Set completed/total footer progress; total=0 clears it; return None.
@@ -128,6 +140,16 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         self._progress = f" | Read {completed}/{total}" if total else ""
         if hasattr(self, "app"):
             self.app.invalidate()
+
+    async def confirm_replacement(self, message, kwargs):
+        """Require explicit CLI approval or invoke the TUI confirmation callback."""
+        callback = kwargs.get("confirm_callback")
+        if callback is None:
+            raise ConfirmationRequired(message)
+        approved = callback(message)
+        if asyncio.iscoroutine(approved):
+            approved = await approved
+        return bool(approved)
 
     async def prepare_tag_import(self, text, kwargs):
         """Prepare exact import data under the dispatch project/tag guard.
@@ -148,13 +170,7 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
                 + ". Overwrite them? Re-run with --replace to overwrite "
                 "without prompting."
             )
-            callback = kwargs.get("confirm_callback")
-            if callback is None:
-                raise ConfirmationRequired(message)
-            approved = callback(message)
-            if asyncio.iscoroutine(approved):
-                approved = await approved
-            if not approved:
+            if not await self.confirm_replacement(message, kwargs):
                 return CommandResult.rejected()
             replace_existing = True
         self._prepared_tag_imports[asyncio.current_task()] = (
@@ -191,6 +207,28 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         device_command = item.name.startswith(
             ("connect ", "read ", "write ", "profile ")
         )
+        server_import = item.name == "serve data import"
+        server_start = item.name in {
+            "serve tcp",
+            "serve udp",
+            "serve tls",
+            "serve rtu",
+            "serve ascii",
+        }
+        server_edit = (
+            (
+                item.name.startswith("serve data ")
+                and item.name
+                not in {
+                    "serve data show",
+                    "serve data export",
+                    "serve data validate",
+                    "serve data reset",
+                }
+            )
+            or item.name.startswith("serve hook ")
+            or server_start
+        )
         task = asyncio.current_task()
         if self._stopping:
             raise CommandError("Application is stopping")
@@ -201,7 +239,27 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
             "tag delete",
             "tag import",
         }
-        if self._tag_import_task is not None and (project_change or tag_mutation):
+        if self._server_edit_task is not None and (
+            project_change or tag_mutation or server_edit
+        ):
+            raise CommandError(
+                "Server configuration is changing; retry when it finishes"
+            )
+        if self.server.stopping and (project_change or tag_mutation or server_edit):
+            raise CommandError("Server is stopping; retry when it finishes")
+        if self.server.listener is not None and (
+            project_change or tag_mutation or server_edit
+        ):
+            raise CommandError(
+                "Stop the server before changing its configuration, tags or project"
+            )
+        if server_edit and (self._tag_mutations or self._tag_import_task is not None):
+            raise CommandError(
+                "Finish tag edits before changing the server configuration"
+            )
+        if self._tag_import_task is not None and (
+            project_change or tag_mutation or server_edit
+        ):
             raise CommandError("Tag import is in progress; retry when it finishes")
         if importing and self._tag_mutations:
             raise CommandError("Tag edits are in progress; retry when they finish")
@@ -239,11 +297,17 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
                 self._opening = False
                 raise CommandError("Connection is closing; retry when it finishes")
             self._device_dispatches.add(task)
+        if server_edit:
+            self._server_edit_task = task
         if tag_mutation:
             self._tag_mutations.add(task)
         if importing:
             self._tag_import_task = task
         try:
+            if server_import:
+                rejected = await self.prepare_server_import(text, kwargs)
+                if rejected is not None:
+                    return rejected
             if importing:
                 rejected = await self.prepare_tag_import(text, kwargs)
                 if rejected is not None:
@@ -253,6 +317,10 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
                 # recording session open; finish it in its original project.
                 await self.finish_record_session()
             result = await super().dispatch(text, **kwargs)
+            if project_change and result.accepted:
+                self.server.simulator = None
+                self.server.state = DataState("No server session")
+                self.client_state = DataState()
             if item.name == "project reset" and "all" in tokens and result.accepted:
                 await self.tags.clear()
             warnings = self._record_warnings.get(task)
@@ -274,6 +342,9 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
                 ) from error
             raise
         finally:
+            if server_edit:
+                self._server_edit_task = None
+                self._prepared_server_imports.pop(task, None)
             if tag_mutation:
                 self._tag_mutations.discard(task)
             if importing:
@@ -294,6 +365,7 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         warnings so an acknowledged write never looks like a failed protocol
         operation and invites a duplicate write. Cancellation still propagates.
         """
+        self.client_state.record(direction, decoded)
         if self._record_session is None:
             return
         try:
@@ -331,7 +403,9 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         async with self._close_lock:
             self._closing = True
             try:
-                pending = self._device_dispatches - {asyncio.current_task()}
+                pending = (self._device_dispatches | self.connection.tasks) - {
+                    asyncio.current_task()
+                }
                 for task in pending:
                     task.cancel()
                 try:
@@ -353,10 +427,17 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
     async def on_stop(self):
         """Reject new dispatches and await close_connection before backend closure."""
         self._stopping = True
-        importing = self._tag_import_task
-        if importing is not None and importing is not asyncio.current_task():
-            importing.cancel()
-            await asyncio.gather(importing, return_exceptions=True)
+        pending = self._tag_mutations | {
+            task
+            for task in (self._tag_import_task, self._server_edit_task)
+            if task is not None
+        }
+        pending.discard(asyncio.current_task())
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), 5)
+        await self.server.stop()
         await self.close_connection()
 
     @command(name="connect")
@@ -371,7 +452,14 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         is cancelled, abort the new connection and propagate the exception so
         subsequent operations cannot run without their intended session.
         """
+        if (
+            self.server.listener
+            and settings.transport in ("rtu", "ascii")
+            and self.server.serial_device == settings.target
+        ):
+            raise CommandError("Client and server cannot share the same serial port")
         await self.connection.connect(settings)
+        self.client_state = DataState(settings.label)
         try:
             await self.finish_record_session()
             self._record_session = await self.records.start_session(
@@ -517,6 +605,8 @@ class ModbusApp(TagCommandMixin, ModbusCommandMixin, CtuiApp):
         storage errors propagate. Profiles contain certificate paths, not keys
         or certificate contents, and depend on those paths on the next machine.
         """
+        if name == CONFIG_NAME:
+            raise CommandError("That name is reserved for server configuration")
         if self.connection.settings is None:
             raise CommandError("Connect before saving a profile")
         await self.configs.save(name, self.connection.settings.as_dict())

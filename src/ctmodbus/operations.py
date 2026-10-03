@@ -347,11 +347,15 @@ class ModbusCommandMixin:
                 if sent
                 else "No write was sent."
             )
-            await self.record_operation("error", {**request, "error": message})
+            await self.record_operation(
+                "error", {**request, "error": message, "sent": sent}
+            )
             raise CommandError(message) from error
         except CommandError as error:
             message = str(error) + ("; write outcome unconfirmed" if sent else "")
-            await self.record_operation("error", {**request, "error": message})
+            await self.record_operation(
+                "error", {**request, "error": message, "sent": sent}
+            )
             raise CommandError(message) from error
         return CommandResult.append(
             f"{timestamp()} Write acknowledged: {kind}\n"

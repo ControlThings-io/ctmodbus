@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-02, `dev-v1.0.0` based on `920daa0`, with local
-prepared tag-import and transaction-safety changes.
+Last reconciled: 2026-10-03, `dev-v1.0.0` based on `2c9afc7`, with local
+server/emulator, plain-proxy and runtime data-view changes.
 
 ## Current state
 
@@ -26,6 +26,12 @@ prepared tag-import and transaction-safety changes.
   spellings are not retained as aliases. Both path arguments use the shared
   ctui path completer from the adjacent development checkout.
 
+- Server/emulator commands, all five transports, TOML and terminal definition
+  editing, typed/random/sequence rules, optional Python hooks, plain proxying,
+  and independent client/downstream evidence views are implemented locally.
+  See [SERVER.md](SERVER.md), [D13](DECISIONS.md#d13--independent-servers-sparse-emulation-proxy-routing-and-evidence-views),
+  and the pump/tank example under `examples/`. MITM rules remain deferred.
+
 ## Next steps and validation gaps
 
 1. Multi-tag serialization/partial output and tag-import confirmation, atomic
@@ -44,11 +50,25 @@ prepared tag-import and transaction-safety changes.
 4. Obtain release approval before publication. Before stable 1.0, adopt tested
    stable ctui and repeat release gates (D08).
 
-Polling, device cloning/simulation, proxies, raw/fuzzy requests, tunneling, and
+Polling, device cloning, MITM rules, raw/fuzzy requests, tunneling, and
 historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 3 server/emulator and proxy changes on `2c9afc7` plus the working tree:
+  all 83 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
+  New regressions cover sparse maps, address 65535, typed/partial sequences,
+  random seeds, timed rules, hook rollback and ticks, import confirmation,
+  lifecycle guards, actual TCP/UDP/TLS/mTLS and PTY RTU/ASCII listeners,
+  cross-transport proxying and unit mapping, faithful exceptions, separate
+  evidence views, pipelined transaction IDs, invalid counts and bind failures.
+  CLI import/validate/export of `examples/device.toml` passed. Black, isort,
+  pylint (10.00/10), lockfile and whitespace checks passed; wheel and sdist
+  builds and isolated wheel/sdist smoke checks passed with the same ctui
+  override. All 21 documented CTUI assembly/export commands also passed.
+  Dependency metadata is unchanged. Physical hardware, remote
+  CI/platform checks and publication were not performed.
 
 - October 2 prepared tag-import changes on `920daa0` plus the working-tree diff:
   all 66 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.

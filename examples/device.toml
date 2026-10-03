@@ -1,0 +1,54 @@
+# ctmodbus pump/tank server configuration.
+version = 1
+unit = 1
+
+[identity]
+vendor = "ControlThings"
+product = "Tank and pump simulator"
+revision = "1.0"
+
+# Only addresses declared below exist in these tables.
+[tables.coils]
+unmapped = "illegal"
+
+[tables.discrete_inputs]
+unmapped = "illegal"
+
+[tables.input_registers]
+unmapped = "illegal"
+
+[tables.holding_registers]
+unmapped = "illegal"
+
+# A client writes this tag to start or stop the pump.
+[tags.pump_enabled]
+table = "coils"
+address = 0
+type = "bool"
+value = false
+
+# The on_write hook updates this status signal.
+[tags.pump_running]
+table = "discrete_inputs"
+address = 0
+type = "bool"
+value = false
+
+# The on_tick hook lowers this value while the pump runs.
+# float32 occupies two registers: 10 and 11.
+[tags.tank_level]
+table = "input_registers"
+address = 10
+type = "float32"
+byte_order = "big"
+word_order = "little"
+value = 100.0
+
+# Python functions live in a companion file beside this TOML file.
+# on_write(device, tag, value): responds to a successful client tag write.
+# on_tick(device, elapsed_seconds): updates the simulation periodically.
+[hooks]
+module = "device_logic.py"
+on_write = "on_write"
+on_tick = "on_tick"
+tick_seconds = 1.0

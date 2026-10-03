@@ -2,6 +2,12 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Add independent TCP/UDP/TLS/RTU/ASCII serving, project-scoped TOML definitions,
+  sparse table defaults, typed static/random/sequence rules, transactional Python
+  hooks, validation, export and runtime reset commands.
+- Add serialized cross-transport proxying and separate client/downstream
+  observation views, retaining write uncertainty and decoded operation records.
+
 - Import the exact confirmed tag data, guard project/tag changes during import,
   and apply tag merges in an isolated all-or-none transaction.
 
