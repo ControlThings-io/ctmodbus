@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-03, `dev-v1.0.0` based on `2c9afc7`, with local
-server/emulator, plain-proxy and runtime data-view changes.
+Last reconciled: 2026-10-05, `dev-v1.0.0` at `4cb75fd`, with development
+environment setup documentation changes.
 
 ## Current state
 
@@ -14,6 +14,10 @@ server/emulator, plain-proxy and runtime data-view changes.
   checkout through `uv run --with-editable ../ctui`. This temporary override
   leaves dependency metadata unchanged. Release validation must use the chosen
   published PyPI ctui version without the override.
+- IDEs using `.venv/bin/python` need the adjacent checkout installed directly
+  with `uv pip install --python .venv/bin/python --editable ../ctui` after
+  `uv sync`. The run-time override alone uses a separate environment. See the
+  [development setup](../README.md#installation).
 - The owner reported RC1 unpublished on September 18. Remote refs, CI, and
   publication state have not been refreshed; CHANGELOG remains Unreleased.
 - The September 21 audit updates global documentation ownership rules, expands
@@ -41,6 +45,8 @@ server/emulator, plain-proxy and runtime data-view changes.
    ctui enhancements listed there remain proposals, not dependency commitments.
 2. Exercise tag completion, collision confirmation, and typed output in a real
    terminal; verify USB metadata on physical serial ports.
+   Investigate the command-suite stall with the current adjacent ctui checkout
+   before treating it as validated against ctmodbus (see October 5 evidence).
 3. Before `1.0.0rc1` release validation, select the published PyPI ctui version,
    update the dependency and lockfile if needed, and stop using the local
    editable override. Then run the [release checklist](../RELEASE_CHECKLIST.md)
@@ -55,6 +61,15 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 5 development environment repair on `4cb75fd`: installed adjacent
+  ctui at `4833e58` editable into the project `.venv`, including its new aiohttp
+  dependency. Direct Python imports resolve ctui to the adjacent source tree;
+  `ctmodbus.app` imports, CLI `--help`, and `uv pip check` passed. The full
+  unittest run stalled on its first test, `test_all_transport_commands`, and
+  was interrupted; no suite success is claimed. Dependency metadata and
+  lockfile remain unchanged. README now documents the direct editable install
+  and development run overrides.
 
 - October 3 server/emulator and proxy changes on `2c9afc7` plus the working tree:
   all 83 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
