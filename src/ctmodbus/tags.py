@@ -67,7 +67,7 @@ class Tag:
     """Immutable definition of one bit or a scalar occupying 1–4 registers.
 
     Construction alone does not validate; call validate() at input boundaries.
-    table uses plural protocol identifiers even though tag create takes singular
+    table uses plural protocol identifiers even though tags create takes singular
     names. Addresses are zero-based; type derives width. No connection identity
     or current value is stored. Eight-bit types still occupy a complete register.
     """
@@ -505,7 +505,7 @@ class TagCommandMixin:
     unexpected file errors can propagate; no mixin-wide serialization is added.
     """
 
-    @command(name="tag create", arguments=TAG_ORDER_ARGUMENTS)
+    @command(name="tags create", arguments=TAG_ORDER_ARGUMENTS)
     async def tag_create(
         self,
         name: str,
@@ -561,7 +561,7 @@ class TagCommandMixin:
             output += "\nWarning: overlaps tags: " + ", ".join(overlaps)
         return CommandResult.append(output)
 
-    @command(name="tag list")
+    @command(name="tags list")
     async def tag_list(self):
         """List tags in the active project."""
         tags = await self.tags.list()
@@ -583,7 +583,7 @@ class TagCommandMixin:
             headers=("Name", "Table", "Address", "Count", "Type", "Byte", "Word"),
         )
 
-    @command(name="tag show", arguments={"name": Argument(completer=complete_tags)})
+    @command(name="tags show", arguments={"name": Argument(completer=complete_tags)})
     async def tag_show(self, name: str):
         """Show one tag and its derived address range."""
         tag = await self.tags.get(name)
@@ -591,13 +591,13 @@ class TagCommandMixin:
         values["range"] = f"{tag.address}-{tag.stop - 1}"
         return "\n".join(f"{key}: {value}" for key, value in values.items())
 
-    @command(name="tag rename", arguments={"name": Argument(completer=complete_tags)})
+    @command(name="tags rename", arguments={"name": Argument(completer=complete_tags)})
     async def tag_rename(self, name: str, new_name: str):
         """Rename a tag in the active project."""
         await self.tags.rename(name, new_name)
         return CommandResult.append(f"Renamed tag {name!r} to {new_name!r}")
 
-    @command(name="tag delete", arguments={"name": Argument(completer=complete_tags)})
+    @command(name="tags delete", arguments={"name": Argument(completer=complete_tags)})
     async def tag_delete(self, name: str):
         """Delete a tag from the active project."""
         await self.tags.delete(name)
@@ -691,7 +691,7 @@ class TagCommandMixin:
         )
 
     @command(
-        name="tag export",
+        name="tags export",
         arguments={
             "path": Argument(help="Destination TOML file", completer=PathCompleter())
         },
@@ -721,7 +721,7 @@ class TagCommandMixin:
         return f"Exported tags to {path}."
 
     @command(
-        name="tag import",
+        name="tags import",
         arguments={
             "path": Argument(help="TOML tag file to import", completer=PathCompleter()),
             "replace": Argument(flags=("--replace",)),

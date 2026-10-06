@@ -235,7 +235,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
     async def test_ui_configuration_export_and_import_confirmation(self):
         for text in (
             "serve data clear --confirm",
-            "tag create level input_register 10 float32",
+            "tags create level input_register 10 float32",
             "serve data set tag level 12.5",
             "serve data set holding_registers 100-199 42",
             "serve data sequence holding_registers 7 10,20,30 --advance read",
@@ -289,7 +289,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         for text in (
             "project create other",
             "serve data clear --confirm",
-            "tag create x coil 0 bool",
+            "tags create x coil 0 bool",
         ):
             with self.assertRaises(CommandError):
                 await self.app.dispatch(text)
@@ -385,8 +385,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             "def on_write(device, tag, value):\n    device.set('running', value)\n    raise ValueError('intentional failure')\n\ndef on_tick(device, elapsed):\n    device.set('running', True)\n"
         )
         await self.app.dispatch("serve data clear --confirm")
-        await self.app.dispatch("tag create enable coil 0 bool")
-        await self.app.dispatch("tag create running discrete_input 0 bool")
+        await self.app.dispatch("tags create enable coil 0 bool")
+        await self.app.dispatch("tags create running discrete_input 0 bool")
         await self.app.dispatch("serve data set tag enable false")
         await self.app.dispatch("serve data set tag running false")
         await self.app.dispatch(f"serve hook write {path} on_write")

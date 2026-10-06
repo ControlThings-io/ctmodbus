@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-05, `dev-v1.0.0` at `4cb75fd`, with development
-environment setup documentation changes.
+Last reconciled: 2026-10-06, `dev-v1.0.0` at `759b8f7`, with local tag
+management command naming changes.
 
 ## Current state
 
@@ -26,9 +26,12 @@ environment setup documentation changes.
 - Resolved and remaining tag lifecycle/concurrency discrepancies are recorded in
   [D12](DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals).
 - Tag TOML commands are grouped with the other tag-management commands as
-  `tag export` and `tag import`; the unreleased `export tags` and `import tags`
+  `tags export` and `tags import`; the unreleased `export tags` and `import tags`
   spellings are not retained as aliases. Both path arguments use the shared
   ctui path completer from the adjacent development checkout.
+  The management group is now `tags` (create/list/show/rename/delete/export/
+  import); dispatch guards, tests, and examples use that spelling. `write tag`
+  and server tag I/O retain their existing syntax. See D11 for the naming decision.
 
 - Server/emulator commands, all five transports, TOML and terminal definition
   editing, typed/random/sequence rules, optional Python hooks, plain proxying,
@@ -61,6 +64,14 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 6 `tags` management rename on `759b8f7` plus the working tree:
+  command-registration checks and CLI help passed with adjacent editable ctui.
+  Four codec tests passed; the focused tag suite then stalled at its first
+  backend-dependent test and was interrupted, consistent with the existing
+  validation blocker. Black and isort checks of changed Python files passed
+  through their synchronous APIs; whitespace checks passed. Full dispatch,
+  import-guard and server regressions still need a completed test run.
 
 - October 5 development environment repair on `4cb75fd`: installed adjacent
   ctui at `4833e58` editable into the project `.venv`, including its new aiohttp

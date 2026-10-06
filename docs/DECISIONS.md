@@ -187,15 +187,21 @@ patterns; signed and decimal literals retain their numeric meaning. Negative
 positional values use ctui's standard `--` end-of-options marker.
 
 Use comma-separated names for `read tags` to fit ctui's typed-list command
-model. Use singular table names in `tag create` because it accepts one starting
+model. Use singular table names in `tags create` because it accepts one starting
 address; persisted definitions retain canonical plural Modbus table names.
 With no names, read all tags in stable name order; otherwise preserve requested
 order and duplicate names. Allow overlapping tags with a creation warning.
 Export deterministic versioned TOML, adding `.toml` when absent; validate
 imports completely and apply them atomically. Existing names require a
 collision-specific TUI confirmation or explicit `--replace`. Keep file
-operations within the tag command group as `tag export` and `tag import`; both
+operations within the tag command group as `tags export` and `tags import`; both
 use ctui's shared path completer.
+
+Accepted naming update, 2026-10-06: rename the management command group from
+`tag` to `tags` at the owner's request. Keep `read tags`, `write tag`, and
+`serve data set tag` unchanged because they name their existing I/O operations.
+Do not register a separate singular management alias; ctui's ordinary command
+prefix matching still applies.
 
 Tagged I/O reuses the existing serialized read/write path, response checks,
 recording, cancellation, and uncertain-write reporting. Tag definitions are

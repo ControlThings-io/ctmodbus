@@ -232,12 +232,12 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
         task = asyncio.current_task()
         if self._stopping:
             raise CommandError("Application is stopping")
-        importing = item.name == "tag import"
+        importing = item.name == "tags import"
         tag_mutation = item.name in {
-            "tag create",
-            "tag rename",
-            "tag delete",
-            "tag import",
+            "tags create",
+            "tags rename",
+            "tags delete",
+            "tags import",
         }
         if self._server_edit_task is not None and (
             project_change or tag_mutation or server_edit

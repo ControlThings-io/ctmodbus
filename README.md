@@ -90,13 +90,13 @@ Tags use the active connection and unit; they do not store a host, unit, or
 connection profile.
 
 ```text
-tag create pause_sw coil 0 bool
-tag create state holding_register 0 uint8
-tag create counter holding_register 1 uint16
-tag create timer holding_register 2 int32
-tag create energy input_register 10 float64 --word-order big
-tag list
-tag show timer
+tags create pause_sw coil 0 bool
+tags create state holding_register 0 uint8
+tags create counter holding_register 1 uint16
+tags create timer holding_register 2 int32
+tags create energy input_register 10 float64 --word-order big
+tags list
+tags show timer
 read tags
 read tags pause_sw,state,counter,timer
 write tag timer 0d33_000
@@ -104,10 +104,10 @@ write tag timer 0x8000_0000
 write tag timer -- -2_000_000_000
 write tag state 0b0111_0001
 write tag pause_sw on
-tag rename timer duration
-tag delete duration
-tag export my_tags
-tag import my_tags.toml
+tags rename timer duration
+tags delete duration
+tags export my_tags
+tags import my_tags.toml
 ```
 
 Types are `bool`, signed and unsigned 8-, 16-, 32-, and 64-bit integers, and
@@ -129,7 +129,7 @@ occupies the selected byte and the unused byte is written as zero: big byte
 order places it in the low byte; little byte order places it in the high byte.
 Byte and word order do not apply to Boolean tags.
 
-`tag create` uses the singular table names `coil`, `discrete_input`,
+`tags create` uses the singular table names `coil`, `discrete_input`,
 `input_register`, and `holding_register`. Coils and discrete inputs support
 `bool`; input and holding registers support numeric types. Writes are limited to
 coils and holding registers. Overlapping tags are allowed and reported when

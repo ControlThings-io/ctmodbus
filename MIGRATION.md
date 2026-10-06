@@ -9,7 +9,7 @@ defaults, profiles, and tags. In particular:
 
 - Supply host and port separately; use `--port` instead of `host:port` syntax.
 - Use plural table names for raw reads/writes, inclusive read ranges, and
-  comma-separated write values. `tag create` uses singular table names.
+  comma-separated write values. `tags create` uses singular table names.
 - Close the active connection before opening another or switching projects.
 - Use project-scoped profiles and decoded records; old storage has no
   compatibility layer. The former `debug eval` command is removed.

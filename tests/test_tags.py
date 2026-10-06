@@ -108,18 +108,18 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_create_list_rename_delete_and_project_scope(self):
         """Verify tag CRUD, project switching, and full-reset removal."""
-        await self.app.dispatch("tag create timer holding_register 2 int32")
-        result = await self.app.dispatch("tag list")
+        await self.app.dispatch("tags create timer holding_register 2 int32")
+        result = await self.app.dispatch("tags list")
         self.assertIn("timer", result.output)
         self.assertIn("little", result.output)
-        result = await self.app.dispatch("tag show timer")
+        result = await self.app.dispatch("tags show timer")
         self.assertIn("range: 2-3", result.output)
-        await self.app.dispatch("tag rename timer duration")
+        await self.app.dispatch("tags rename timer duration")
         self.assertEqual((await self.app.tags.get("duration")).address, 2)
-        await self.app.dispatch("tag delete duration")
+        await self.app.dispatch("tags delete duration")
         self.assertEqual(await self.app.tags.list(), [])
 
-        await self.app.dispatch("tag create local coil 0 bool")
+        await self.app.dispatch("tags create local coil 0 bool")
         await self.app.dispatch("project create other")
         self.assertEqual(await self.app.tags.list(), [])
         await self.app.dispatch("project load default")
@@ -129,22 +129,22 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_overlap_warning_and_duplicate_rejection(self):
         """Permit overlaps but reject duplicate names and invalid creation syntax."""
-        await self.app.dispatch("tag create first holding_register 0 uint32")
-        result = await self.app.dispatch("tag create second holding_register 1 uint16")
+        await self.app.dispatch("tags create first holding_register 0 uint32")
+        result = await self.app.dispatch("tags create second holding_register 1 uint16")
         self.assertIn("overlaps tags: first", result.output)
         with self.assertRaisesRegex(CommandError, "already exists"):
-            await self.app.dispatch("tag create first holding_register 3 uint16")
+            await self.app.dispatch("tags create first holding_register 3 uint16")
         with self.assertRaisesRegex(CommandError, "do not accept"):
-            await self.app.dispatch("tag create bit coil 0 bool --byte-order little")
+            await self.app.dispatch("tags create bit coil 0 bool --byte-order little")
         with self.assertRaisesRegex(CommandError, "must be one of"):
-            await self.app.dispatch("tag create old coils 0 bool")
+            await self.app.dispatch("tags create old coils 0 bool")
 
     async def test_tag_reads_and_writes(self):
         """Verify raw encodings, signed writes, read-only rejection, and read-all dispatch."""
-        await self.app.dispatch("tag create switch coil 0 bool")
-        await self.app.dispatch("tag create state holding_register 5 uint8")
-        await self.app.dispatch("tag create timer holding_register 6 int32")
-        await self.app.dispatch("tag create sensed discrete_input 4 bool")
+        await self.app.dispatch("tags create switch coil 0 bool")
+        await self.app.dispatch("tags create state holding_register 5 uint8")
+        await self.app.dispatch("tags create timer holding_register 6 int32")
+        await self.app.dispatch("tags create sensed discrete_input 4 bool")
         await self.connect()
 
         await self.app.dispatch("write tag switch on")
@@ -197,8 +197,8 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_multi_tag_order_duplicates_and_prevalidation(self):
         """Preserve explicit order/repeats and reject unknown tags before I/O."""
-        await self.app.dispatch("tag create first holding_register 1 uint16")
-        await self.app.dispatch("tag create second holding_register 2 uint16")
+        await self.app.dispatch("tags create first holding_register 1 uint16")
+        await self.app.dispatch("tags create second holding_register 2 uint16")
         await self.connect()
         await self.app.dispatch("read tags second,first,second")
         self.assertEqual([args["address"] for _, args in self.client.calls], [2, 1, 2])
@@ -211,7 +211,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         """Keep decoded rows and stop before later tags on a malformed reply."""
         for name, address in (("first", 1), ("second", 2), ("third", 3)):
             await self.app.dispatch(
-                f"tag create {name} holding_register {address} uint16"
+                f"tags create {name} holding_register {address} uint16"
             )
         await self.connect()
         self.client.reply = lambda name, args: response(
@@ -236,7 +236,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         """A queued raw read cannot execute between two tag requests."""
         for name, address in (("first", 1), ("second", 2)):
             await self.app.dispatch(
-                f"tag create {name} holding_register {address} uint16"
+                f"tags create {name} holding_register {address} uint16"
             )
         await self.connect()
         self.client.gate = asyncio.Event()
@@ -253,7 +253,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         """Cancellation during the second tag retains the first and closes I/O."""
         for name, address in (("first", 1), ("second", 2), ("third", 3)):
             await self.app.dispatch(
-                f"tag create {name} holding_register {address} uint16"
+                f"tags create {name} holding_register {address} uint16"
             )
         await self.connect()
         second_started = asyncio.Event()
@@ -290,18 +290,18 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_export_import_collision_confirmation_and_replace(self):
         """Round-trip TOML and verify collision rejection, declined prompts, and replace."""
-        await self.app.dispatch("tag create timer holding_register 2 int32")
+        await self.app.dispatch("tags create timer holding_register 2 int32")
         path = Path(self.directory.name) / "my_tags"
-        result = await self.app.dispatch(f"tag export {path}")
+        result = await self.app.dispatch(f"tags export {path}")
         exported = path.with_suffix(".toml")
         self.assertTrue(exported.is_file())
         self.assertIn('word_order = "little"', exported.read_text(encoding="utf-8"))
-        await self.app.dispatch("tag delete timer")
-        await self.app.dispatch(f"tag import {exported}")
+        await self.app.dispatch("tags delete timer")
+        await self.app.dispatch(f"tags import {exported}")
         self.assertEqual((await self.app.tags.get("timer")).count, 2)
 
         with self.assertRaisesRegex(ConfirmationRequired, "timer"):
-            await self.app.dispatch(f"tag import {exported}")
+            await self.app.dispatch(f"tags import {exported}")
         messages = []
 
         async def decline(message):
@@ -310,16 +310,16 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             return False
 
         result = await self.app.dispatch(
-            f"tag import {exported}", confirm_callback=decline
+            f"tags import {exported}", confirm_callback=decline
         )
         self.assertFalse(result.accepted)
         self.assertIn("--replace", messages[0])
-        result = await self.app.dispatch(f"tag import {exported} --replace")
+        result = await self.app.dispatch(f"tags import {exported} --replace")
         self.assertIn("Imported 1 tags", result.output)
 
     async def test_import_uses_confirmed_data_and_guards_project(self):
         """A changed file cannot change approved data; prefixes share the guard."""
-        await self.app.dispatch("tag create timer holding_register 2 uint16")
+        await self.app.dispatch("tags create timer holding_register 2 uint16")
         path = Path(self.directory.name) / "confirmed.toml"
         path.write_text(
             export_tag_document([Tag("timer", "holding_registers", 9, "uint16")])
@@ -330,18 +330,18 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("timer", message)
             for command in (
                 "project create other",
-                "tag delete timer",
-                "tag import missing.toml",
+                "tags delete timer",
+                "tags import missing.toml",
             ):
                 with self.assertRaisesRegex(CommandError, "import is in progress"):
                     await self.app.dispatch(command)
             path.write_text(
                 export_tag_document([Tag("unexpected", "coils", 0, "bool")])
             )
-            await self.app.dispatch("help tag import")
+            await self.app.dispatch("help tags import")
             return True
 
-        await self.app.dispatch(f"tag imp {path}", confirm_callback=approve)
+        await self.app.dispatch(f"tags imp {path}", confirm_callback=approve)
         self.assertEqual((await self.app.tags.get("timer")).address, 9)
         self.assertEqual(await self.app.tags.names(), {"timer"})
         self.assertIsNone(self.app._tag_import_task)
@@ -361,11 +361,11 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             await save(tag)
 
         with patch.object(self.app.tags, "save", paused_save):
-            task = asyncio.create_task(self.app.dispatch("tag create new coil 0 bool"))
+            task = asyncio.create_task(self.app.dispatch("tags create new coil 0 bool"))
             await asyncio.wait_for(started.wait(), 1)
             try:
                 with self.assertRaisesRegex(CommandError, "Tag edits are in progress"):
-                    await self.app.dispatch("tag import missing.toml")
+                    await self.app.dispatch("tags import missing.toml")
                 with self.assertRaises(CommandError):
                     await self.app.dispatch("project create other")
             finally:
@@ -375,7 +375,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancelled_import_confirmation_leaves_tags_unchanged(self):
         """Cancellation releases the project guard without applying any data."""
-        await self.app.dispatch("tag create timer holding_register 2 uint16")
+        await self.app.dispatch("tags create timer holding_register 2 uint16")
         path = Path(self.directory.name) / "cancelled.toml"
         path.write_text(
             export_tag_document([Tag("timer", "holding_registers", 9, "uint16")])
@@ -388,7 +388,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.Event().wait()
 
         task = asyncio.create_task(
-            self.app.dispatch(f"tag import {path}", confirm_callback=approve)
+            self.app.dispatch(f"tags import {path}", confirm_callback=approve)
         )
         await asyncio.wait_for(started.wait(), 1)
         task.cancel()
@@ -396,11 +396,11 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             await task
         self.assertEqual((await self.app.tags.get("timer")).address, 2)
         self.assertIsNone(self.app._tag_import_task)
-        await self.app.dispatch("tag delete timer")
+        await self.app.dispatch("tags delete timer")
 
     async def test_import_transaction_rolls_back_every_row(self):
         """A later SQL constraint failure cannot leave earlier inserts committed."""
-        await self.app.dispatch("tag create existing coil 0 bool")
+        await self.app.dispatch("tags create existing coil 0 bool")
         with self.assertRaises(sqlite3.IntegrityError):
             await self.app.tags.import_all(
                 [Tag("new", "coils", 1, "bool"), Tag("existing", "coils", 2, "bool")]
@@ -434,7 +434,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     def test_import_and_export_use_path_completion(self):
         """Expose ctui filesystem suggestions on both tag-file path arguments."""
-        for name in ("tag import", "tag export"):
+        for name in ("tags import", "tags export"):
             with self.subTest(command=name):
                 completer = self.app.commands[name].arguments["path"].completer
                 self.assertIsInstance(completer, PathCompleter)
@@ -450,5 +450,5 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8",
         )
         with self.assertRaisesRegex(CommandError, "Invalid tag 'bad'"):
-            await self.app.dispatch(f"tag import {path}")
+            await self.app.dispatch(f"tags import {path}")
         self.assertEqual(await self.app.tags.list(), [])

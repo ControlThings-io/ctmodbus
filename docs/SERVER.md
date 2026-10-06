@@ -143,9 +143,9 @@ serve data table discrete_inputs --unmapped illegal
 serve data table input_registers --unmapped illegal
 serve data table holding_registers --unmapped illegal
 
-tag create pump_enabled coil 0 bool
-tag create pump_running discrete_input 0 bool
-tag create tank_level input_register 10 float32
+tags create pump_enabled coil 0 bool
+tags create pump_running discrete_input 0 bool
+tags create tank_level input_register 10 float32
 serve data set tag pump_enabled false
 serve data set tag pump_running false
 serve data set tag tank_level 100.0
