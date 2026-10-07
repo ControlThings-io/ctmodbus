@@ -283,14 +283,15 @@ class ComponentTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(
                         self.app.layout.output_field.text, "Existing output"
                     )
-            await self.app.dispatch("client start tcp localhost")
+            with patch.object(view, "dialog", AsyncMock(return_value={"button": 0})):
+                await view.spawn(view.command("client start tcp localhost", "start"))
             self.app.server.proxy = True
             with patch.object(view, "dialog", AsyncMock(return_value={"button": 1})):
-                await view.command("client stop", "decline")
+                await view.spawn(view.command("client stop", "decline"))
             self.assertTrue(self.client.connected)
             self.assertTrue(self.app.server.proxy)
             with patch.object(view, "dialog", AsyncMock(return_value={"button": 0})):
-                await view.command("client stop", "approve")
+                await view.spawn(view.command("client stop", "approve"))
             self.assertFalse(self.client.connected)
             self.assertFalse(self.app.server.proxy)
         finally:

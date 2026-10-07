@@ -478,7 +478,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
             await writer.wait_closed()
 
-    async def test_bind_failure_and_foreground_cleanup(self):
+    async def test_bind_failure_and_nonblocking_start(self):
         port = free_port()
         with socket.socket() as occupied:
             occupied.bind(("127.0.0.1", port))
@@ -486,18 +486,13 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(CommandError):
                 await self.app.dispatch(f"server start tcp 127.0.0.1 --port {port}")
         self.assertIsNone(self.app.server.listener)
-        task = asyncio.create_task(
-            self.app.dispatch(f"server start tcp 127.0.0.1 --port {port} --foreground")
+        result = await asyncio.wait_for(
+            self.app.dispatch(f"server start tcp 127.0.0.1 --port {port}"), 1
         )
-
-        async def started():
-            while self.app.server.label == "Stopped":
-                await asyncio.sleep(0.01)
-
-        await asyncio.wait_for(started(), 1)
-        self.assertFalse(task.done())
+        self.assertIn("Server TCP", result.output)
+        with self.assertRaises(CommandError):
+            await self.app.dispatch("server start tcp localhost --foreground")
         await self.app.dispatch("server stop --confirm")
-        await asyncio.wait_for(task, 1)
         self.assertIsNone(self.app.server.listener)
 
     @unittest.skipUnless(shutil.which("openssl"), "TLS certificates require OpenSSL")

@@ -2,6 +2,12 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Present ctmodbus management results in standard scrollable TUI/WUI popups,
+  preserving main output while device work and request logging continue.
+- Remove server --foreground options. CLI now runs the full command sequence,
+  then keeps remaining listeners alive; errors, explicit exit, and interruption
+  clean up server and client resources.
+
 - Refactor unreleased commands into client/server/proxy component groups, with
   start/stop/status, separate configuration and runtime views, and example
   help popups. Remove old command spellings; ctui-owned commands are unchanged.

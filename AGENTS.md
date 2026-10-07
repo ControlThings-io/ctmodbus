@@ -65,6 +65,7 @@ Publishing requires release approval; pushing a version tag triggers publication
   records, progress, cancellation, and shutdown.
 - `src/ctmodbus/client_commands.py`: client lifecycle and selected configuration.
 - `src/ctmodbus/proxy_commands.py`: proxy lifecycle and logging controls.
+- `src/ctmodbus/result_popups.py`: standard management-result dialog policy.
 - `src/ctmodbus/component_help.py`: example-led component help popup adapter.
 - `src/ctmodbus/connection.py`: settings, client factory, serialization, timeouts.
 - `src/ctmodbus/operations.py`: typed reads/writes, chunking, response validation.

@@ -228,6 +228,20 @@ poll before changing projects; polls never follow a replacement connection.
 connection. `client stop`, connection loss, or application shutdown stop
 polling; cancellation closes the transport and requires explicit reconnection.
 
+## Management result popups
+
+In TUI/WUI, ctmodbus management results use standard scrollable message dialogs
+with descriptive titles. This includes start/stop, list/show/status, import/export,
+discovery, validation, configuration set/save/load, tag create/rename/delete,
+server rule/hook edits, logging switches, reset, and clear. Actions finish before
+the dialog opens. Dismiss it before submitting another command; running servers,
+proxying, polling, and request logging continue. Main output remains intact.
+Existing confirmation dialogs still precede actions requiring approval.
+
+Read/write results, polling rows, and server/proxy request logs stay in the main
+output pane. Bare component help keeps its standard help popup. Inherited ctui
+commands retain their existing behavior. CLI management results remain plain text.
+
 ## Connection options and operation results
 
 All connections accept `--unit` (1–247), `--timeout` (seconds), and `--retries`
@@ -274,7 +288,11 @@ interactive examples above are explanatory and should be omitted when typing.
 
 Commands execute sequentially in CLI mode and stop at the first error. Exit
 status is 0 for success, 2 for command/argument/protocol errors, and 1 for
-unexpected command failures. Shutdown closes the connection automatically.
+unexpected command failures. After a successful CLI command sequence, the process stays alive if a server
+is still running. Ctrl-C stops it and closes both server and client. Include
+`server stop` to finish a temporary-server sequence and exit normally. An error
+or explicit exit command skips keepalive and shuts everything down. Server starts
+return immediately to allow subsequent commands; `--foreground` is removed.
 
 ## Projects, profiles, and records
 
@@ -392,7 +410,7 @@ client status
 
 `proxy start` routes incoming server requests through the connected client;
 `proxy stop` restores local behavior. See [server and proxy usage](docs/SERVER.md)
-for all commands, foreground CLI serving, hooks, defaults and evidence semantics.
+for all commands, CLI server keepalive, hooks, defaults and evidence semantics.
 
 ### Server and proxy request output
 
@@ -430,6 +448,6 @@ Request failures remain visible in quiet mode. Failed proxy writes distinguish
 potentially unconfirmed outcomes; upstream exceptions are shown without implying
 forwarding success. Display escapes control characters. Polling and server logs
 share one synchronous append path for terminal, browser, and CLI output. CLI
-listeners still need `--foreground` to remain running. Malformed/unsupported
+listeners remain running automatically after a successful command sequence. Malformed/unsupported
 requests that the decoder reports also produce diagnostic lines. Future MITM
 logging is not implemented.

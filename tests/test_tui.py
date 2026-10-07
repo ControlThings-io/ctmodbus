@@ -48,6 +48,12 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(
                             await asyncio.wait_for(finished.get(), 3), name
                         )
+                        if name == "client start tcp":
+                            while app._result_popup_task is None:
+                                await asyncio.sleep(0)
+                            pipe.send_text("\r")
+                            while app._result_popup_task is not None:
+                                await asyncio.sleep(0)
                     dialogs = asyncio.Queue()
 
                     async def show_overview(dialog):

@@ -36,7 +36,6 @@ TARGET_ARGS = {
 NETWORK_ARGS = {
     "host": Argument(help="Local bind address"),
     "port": Argument(flags=("--port",)),
-    "foreground": Argument(flags=("--foreground",)),
     "quiet": Argument(flags=("--quiet",)),
 }
 SERIAL_ARGS = {
@@ -48,7 +47,6 @@ SERIAL_ARGS = {
             "bytesize",
             "parity",
             "stopbits",
-            "foreground",
             "quiet",
         )
     },
@@ -462,10 +460,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         lines.append(self.server.state.show(await self.tags.list()))
         return "\n".join(lines)
 
-    async def start_server(self, settings, foreground=False, quiet=False, **tls):
-        """Start in background for TUI, or wait until stopped in explicit
-        foreground mode.
-        """
+    async def start_server(self, settings, quiet=False, **tls):
+        """Bind the server and return immediately; CLI lifetime belongs to the app."""
         try:
             config = await self.server_definition()
             await self.validate_server_tags(config)
@@ -473,11 +469,6 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             await self.server.start(config, settings, quiet=quiet, **tls)
         except (OSError, ValueError, RuntimeError) as error:
             raise CommandError(f"Server start failed: {error}") from error
-        if foreground:
-            try:
-                await self.server.stop_event.wait()
-            finally:
-                await self.server.stop()
         return CommandResult.append(f"Server {self.server.label}")
 
     @command(name="server start tcp", arguments=NETWORK_ARGS)
@@ -485,12 +476,11 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         self,
         host: str = "127.0.0.1",
         port: int = 5020,
-        foreground: bool = False,
         quiet: bool = False,
     ):
-        """Serve Modbus TCP; --foreground keeps command-line mode alive."""
+        """Start a Modbus TCP listener without blocking later commands."""
         return await self.start_server(
-            ConnectionSettings("tcp", host, port=port), foreground, quiet=quiet
+            ConnectionSettings("tcp", host, port=port), quiet=quiet
         )
 
     @command(name="server start udp", arguments=NETWORK_ARGS)
@@ -498,12 +488,11 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         self,
         host: str = "127.0.0.1",
         port: int = 5020,
-        foreground: bool = False,
         quiet: bool = False,
     ):
         """Serve Modbus UDP from the local definition."""
         return await self.start_server(
-            ConnectionSettings("udp", host, port=port), foreground, quiet=quiet
+            ConnectionSettings("udp", host, port=port), quiet=quiet
         )
 
     @command(
@@ -523,13 +512,11 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         cert_file: str | None = None,
         key_file: str | None = None,
         ca_file: str | None = None,
-        foreground: bool = False,
         quiet: bool = False,
     ):
         """Serve native Modbus TLS; optional CA roots require client certificates."""
         return await self.start_server(
             ConnectionSettings("tls", host, port=port),
-            foreground,
             quiet=quiet,
             cert_file=cert_file,
             key_file=key_file,
@@ -544,7 +531,6 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         bytesize: int = 8,
         parity: Literal["N", "E", "O"] = "N",
         stopbits: int = 1,
-        foreground: bool = False,
         quiet: bool = False,
     ):
         """Respond as an RTU device on a local serial port, not a traffic tap."""
@@ -557,7 +543,6 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                 parity=parity,
                 stopbits=stopbits,
             ),
-            foreground,
             quiet=quiet,
         )
 
@@ -569,7 +554,6 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         bytesize: int = 8,
         parity: Literal["N", "E", "O"] = "N",
         stopbits: int = 1,
-        foreground: bool = False,
         quiet: bool = False,
     ):
         """Respond as an ASCII device on a local serial port."""
@@ -582,7 +566,6 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                 parity=parity,
                 stopbits=stopbits,
             ),
-            foreground,
             quiet=quiet,
         )
 

@@ -20,6 +20,7 @@ from ctmodbus.data_state import DataState
 from ctmodbus.operations import ModbusCommandMixin
 from ctmodbus.polling import TABLE_ARGUMENTS, Poll, PollCommandMixin
 from ctmodbus.proxy_commands import ProxyCommandMixin
+from ctmodbus.result_popups import result_title, show_result
 from ctmodbus.server import Server
 from ctmodbus.server_commands import ServerCommandMixin
 from ctmodbus.tags import TagCommandMixin, TagStore, parse_tag_document
@@ -71,6 +72,11 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
         self._poll_orders = {}
         self._poll_start_task = None
         self._poll_stdout = None
+        self._cli_failed = False
+        self._cli_exit_requested = False
+        self._result_popup_task = None
+        self._result_popup_tasks = set()
+        self._result_popup_lock = asyncio.Lock()
         self.client_state = DataState()
         self._server_edit_task = None
         self._prepared_server_imports = {}
@@ -179,8 +185,49 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
         )
         return None
 
+    async def dispatch(self, text, **kwargs):
+        """Execute shared dispatch, then present owned management results in UI.
+
+        Result dialogs preserve the output pane and run after lifecycle guards
+        release. Reject another submission until dismissed. CLI failures and
+        explicit exit requests disable server keepalive during normal teardown.
+        """
+        if self._result_popup_task is not None:
+            raise CommandError(
+                "Dismiss the result popup before starting another command"
+            )
+        try:
+            result = await self.dispatch_modbus(text, **kwargs)
+        except BaseException:
+            if self._poll_stdout is not None:
+                self._cli_failed = True
+            raise
+        if result.exit_requested:
+            self._cli_exit_requested = True
+        title = result_title(self.commands.resolve(text)[0].name)
+        if (
+            title
+            and result.accepted
+            and result.output is not None
+            and self._poll_stdout is None
+            and getattr(self, "app", None) is not None
+        ):
+            task = asyncio.current_task()
+            self._result_popup_tasks.add(task)
+            try:
+                async with self._result_popup_lock:
+                    self._result_popup_task = task
+                    try:
+                        await show_result(title, result.output)
+                    finally:
+                        self._result_popup_task = None
+            finally:
+                self._result_popup_tasks.discard(task)
+            return replace(result, output=None, append_output=False)
+        return result
+
     # Lifecycle arbitration is intentionally centralized around command dispatch.
-    async def dispatch(  # pylint: disable=too-many-branches,too-many-statements
+    async def dispatch_modbus(  # pylint: disable=too-many-branches,too-many-statements
         self, text, **kwargs
     ):
         """Return the ctui result for text while arbitrating device lifecycle.
@@ -515,12 +562,15 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
                 self.update_progress(0, 0)
 
     async def run_cli(self, arguments, *, stdout=None, stderr=None, program=None):
-        """Stream polling rows to CLI stdout and await limits before later commands.
+        """Run CLI commands, then keep a remaining server alive until stopped.
 
-        TUI/WUI starts remain background operations. An unlimited CLI poll runs
-        until interrupted. Delegate parsing and backend lifecycle to ctui.
+        Stream runtime rows to stdout. ctui owns parsing, errors, and storage
+        lifetime. Successful sequences wait in on_stop; failures or explicit exit
+        clean up immediately. Cancellation/Ctrl-C always drains both endpoints.
         """
         self._poll_stdout = stdout or sys.stdout
+        self._cli_failed = False
+        self._cli_exit_requested = False
         try:
             return await super().run_cli(
                 arguments, stdout=stdout, stderr=stderr, program=program
@@ -533,18 +583,37 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
         self._stopping = False
 
     async def on_stop(self):
-        """Reject new dispatches and await close_connection before backend closure."""
+        """Keep successful CLI servers alive, then always drain runtime resources."""
+        try:
+            if (
+                self._poll_stdout is not None
+                and not self._cli_failed
+                and not self._cli_exit_requested
+                and self.server.listener is not None
+            ):
+                self._poll_stdout.flush()
+                await self.server.stop_event.wait()
+        finally:
+            await self.stop_runtime()
+
+    async def stop_runtime(self):
+        """Reject dispatch and cancel UI/management tasks before closing services."""
         self._stopping = True
-        pending = self._tag_mutations | {
-            task
-            for task in (
-                self._tag_import_task,
-                self._server_edit_task,
-                self._client_config_task,
-                self._component_stop_task,
-            )
-            if task is not None
-        }
+        pending = (
+            self._tag_mutations
+            | self._result_popup_tasks
+            | {
+                task
+                for task in (
+                    self._tag_import_task,
+                    self._server_edit_task,
+                    self._client_config_task,
+                    self._component_stop_task,
+                    self._result_popup_task,
+                )
+                if task is not None
+            }
+        )
         pending.discard(asyncio.current_task())
         for task in pending:
             task.cancel()

@@ -12,9 +12,13 @@ def main():
 
     ctui manages backend startup/shutdown. CLI raises SystemExit with status
     0 for success, 2 for command errors, or 1 for unexpected failures; TUI
-    returns after exit. No live application is retained globally.
+    returns after exit. Ctrl-C completes async cleanup and exits 130 without a
+    traceback. No live application is retained globally.
     """
-    ModbusApp().run()
+    try:
+        ModbusApp().run()
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

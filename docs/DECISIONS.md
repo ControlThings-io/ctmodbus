@@ -384,3 +384,33 @@ proxy_commands.py; server commands remain in server_commands.py. App.py
 owns shared dispatch arbitration, projects, records, progress and shutdown.
 Transport validation/factories and request routing remain in their existing
 modules, preserving serialization and protocol evidence contracts.
+
+## D17 — Management result popups and CLI server keepalive
+
+Accepted and implemented, 2026-10-06, by explicit owner direction. This supersedes
+D13's explicit foreground option and ordinary management result presentation.
+
+Use standard ctui MessageDialog popups for owned start/stop/list/show/status,
+import/export, discovery, validation, configuration set/save/load, tag edits,
+server rule/hook edits, logging controls, reset, and clear. Descriptive titles,
+scrollbars and unwrapped terminal text support reference tables. Actions finish
+before presentation; modal dismissal gates later input without blocking async
+servers, proxy exchanges, polling or output appends. Concurrent already-running
+commands serialize their result dialogs; shutdown cancels pending presentations.
+Existing confirmation dialogs precede the action. Errors and component help
+retain their standard ctui presentation. Do not change ctui-owned commands.
+
+Read/write results, polling rows and request logs remain in the main output.
+CLI and headless dispatch preserve plain result text. The result policy and
+standard widget call are isolated in result_popups.py; no custom widgets or
+browser styles are introduced.
+
+Remove --foreground from all transports/interfaces. Start always returns after
+binding. CLI executes all supplied commands, then keeps a still-running server
+alive after a successful sequence. A sequence stopping the server exits normally.
+The first expected/unexpected command error, or explicit exit, skips keepalive
+and cleans up all services with existing exit status semantics. Cancellation
+also drains services and closes project storage. The application implements
+keepalive before shutdown through its lifecycle hook, retaining ctui's parsing,
+sequential execution, error formatting, and backend ownership. Console Ctrl-C
+finishes async cleanup and exits 130 without printing a traceback.

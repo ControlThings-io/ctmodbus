@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-06, `dev-v1.0.0` at `5ffde8c`, with the local
-component command/configuration/TOML refactor. Changes remain uncommitted.
+Last reconciled: 2026-10-06, `dev-v1.0.0` at `ea96a46`, with local management
+result popups and automatic CLI server keepalive. Changes remain uncommitted.
 
 ## Current state
 
@@ -55,8 +55,9 @@ component command/configuration/TOML refactor. Changes remain uncommitted.
   [request display controls](SERVER.md#request-display-controls) and
   [D15](DECISIONS.md#d15--independent-server-and-proxy-request-display).
 - The `aad20cd` revert removed the application-wide append default. Ordinary
-  command output follows existing per-command behavior; runtime request/polling
-  lines explicitly append. ctui built-in commands remain unchanged.
+  management results now use TUI/WUI popups, while runtime request/polling
+  lines explicitly append. Read/write output and ctui built-ins retain their
+  existing presentation. See D17.
 
 - Component commands now follow client/server/proxy start/stop/status, with
   client discover, selected client config show/set/save/load, server config/hook
@@ -71,6 +72,17 @@ component command/configuration/TOML refactor. Changes remain uncommitted.
   Existing unreleased server configs need explicit format/key updates or
   clear/reimport. Client/proxy commands have dedicated modules; shared lifecycle
   arbitration remains in app.py.
+
+- Owned management results now use standard scrollable ctui message dialogs
+  with descriptive titles. Actions finish first; background logging and polling
+  continue while dismissal gates new command submissions. UI output is preserved,
+  confirmations remain separate, and CLI/headless results stay plain text.
+- Every server start returns immediately; --foreground has been removed. CLI
+  executes the full sequence, then keeps a remaining listener alive on success.
+  Errors and explicit exit bypass keepalive; cancellation always cleans up both
+  endpoints. The CLI entry point handles Ctrl-C without a traceback (exit 130).
+  See [D17](DECISIONS.md#d17--management-result-popups-and-cli-server-keepalive)
+  and [result presentation](../README.md#management-result-popups).
 
 ## Next steps and validation gaps
 
@@ -100,6 +112,24 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 6 management popups/CLI keepalive on `ea96a46` plus the working tree,
+  Python 3.11.16 with adjacent ctui at `ec16fb1`: all 117 tests passed. New
+  coverage exercises standard TUI popup dismissal, WUI result presentation,
+  descriptive-title/owned-command scope, output preservation and live network
+  request logging while a startup popup awaits dismissal, command gating and
+  popup cancellation at shutdown. CLI regressions cover later commands before
+  keepalive, normal stop/exit, expected/unexpected errors, cancellation cleanup,
+  and a real POSIX subprocess SIGINT that exits 130 without traceback and releases
+  its listener. Existing TCP/UDP/TLS/mTLS/PTY transport, proxy, polling, record,
+  configuration and project isolation regressions pass.
+- Black/isort formatting, pylint (10.00/10), lockfile, local documentation links
+  and whitespace checks passed. Wheel/sdist builds and both isolated artifact
+  smoke tests passed with the development ctui override. Dependency metadata
+  and lockfile are unchanged. Remote platform CI, physical hardware and manual
+  sustained browser/terminal checks were not run; published-ctui validation
+  remains a release gate.
+
 
 - October 6 component refactor on `5ffde8c` plus the working tree, Python
   3.11.16 with adjacent ctui at `ec16fb1`: all 111 tests passed. Coverage includes

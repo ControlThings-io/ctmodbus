@@ -37,19 +37,23 @@ serial traffic for other units (including broadcasts) is ignored.
 TLS uses native PyModbus TLS framing. Certificate and unencrypted key files are
 required. `--ca-file` additionally requires trusted client certificates.
 
-The shared dispatch path also supports CLI command sequences. Use explicit
-`--foreground` to keep a listener alive in CLI mode:
+The shared dispatch path supports CLI command sequences. Every server start
+returns immediately. After all commands succeed, CLI stays alive if a listener
+remains running:
 
 ```bash
 uv run --with-editable ../ctui ctmodbus \
   -c "server config import examples/device.toml" \
-  -c "server start tcp 127.0.0.1 --port 5020 --foreground"
+  -c "server start tcp 127.0.0.1 --port 5020"
 ```
 
-Without foreground mode, a CLI invocation exits after its commands and closes
-its listener. In a TUI, use the normal background form. Foreground commands
-wait until stopped or interrupted; do not place later commands behind them in
-a command file.
+Ctrl-C stops the listener and client cleanly. Commands following a server start
+still run before keepalive. A sequence ending with server stop exits normally;
+command errors or explicit exit shut down immediately. The previous
+`--foreground` option is removed from every transport and interface.
+TUI/WUI starts display their completed startup result in a standard message
+popup while the listener and request logs remain active. Management popups
+preserve the main output; see [result presentation](../README.md#management-result-popups).
 
 ## Address maps and values
 
