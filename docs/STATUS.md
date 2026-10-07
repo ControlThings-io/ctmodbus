@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-06, `dev-v1.0.0` at `ea96a46`, with local management
-result popups and automatic CLI server keepalive. Changes remain uncommitted.
+Last reconciled: 2026-10-07, `dev-v1.0.0` at `f0cdb23`, with local confirmed
+bulk tag deletion and atomic server tag-rule removal. Changes remain uncommitted.
 
 ## Current state
 
@@ -84,6 +84,15 @@ result popups and automatic CLI server keepalive. Changes remain uncommitted.
   See [D17](DECISIONS.md#d17--management-result-popups-and-cli-server-keepalive)
   and [result presentation](../README.md#management-result-popups).
 
+- `tags delete --all` now supports confirmed bulk deletion; NAME/--all are
+  exclusive. Saved server tag references refuse deletion unless explicitly
+  removed using --remove-server-rules. Both tables change in one transaction;
+  other config and external files are retained. Hook warnings appear before
+  approval. TUI/WUI use standard Yes/No confirmation and MessageDialog results;
+  CLI requires --confirm for bulk/rule deletion or hook warnings. Dispatch
+  reserves tag/project/server edits across preparation and approval. See
+  [tag removal](../README.md#removing-tags) and D18.
+
 ## Next steps and validation gaps
 
 1. Multi-tag serialization/partial output and tag-import confirmation, atomic
@@ -112,6 +121,24 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 7 tag deletion on `f0cdb23` plus the working tree, Python 3.11.16
+  with adjacent ctui at `79579d0`: all 127 tests passed. New regressions cover
+  bulk approval/empty selection, exclusive and unknown targets, single/bulk saved
+  references, explicit rule removal, pre-approval counts/hook warnings, retained
+  unrelated configuration, approval cancellation, SQL rollback on either table,
+  changed-config rejection, in-flight edit protection, stopped server/polling
+  requirements, and actual WUI Yes/No confirmation with MessageDialog completion.
+  Existing transport, polling, popup, CLI, project and import regressions pass.
+  The adjacent ctui moved configs under project configs; README and test/smoke
+  references were reconciled with that inherited API, without modifying ctui.
+- Black/isort checks, pylint (10.00/10), lockfile, whitespace and local document
+  links passed. Wheel/sdist builds and isolated artifact smoke tests passed with
+  the adjacent ctui override. Dependency metadata and lockfile are unchanged.
+  IDE editable ctui imports and dependency compatibility were checked. Physical
+  hardware, remote platform CI and sustained manual UI checks were not performed;
+  published-ctui validation remains a release gate.
+
 
 - October 6 management popups/CLI keepalive on `ea96a46` plus the working tree,
   Python 3.11.16 with adjacent ctui at `ec16fb1`: all 117 tests passed. New

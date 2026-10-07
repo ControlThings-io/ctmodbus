@@ -190,7 +190,7 @@ class ComponentTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(CommandError):
                 await self.app.dispatch(old)
         self.assertEqual(self.app.commands.resolve("serve")[0].name, "server")
-        await self.app.dispatch("configs show tcp-local")
+        await self.app.dispatch("project configs show tcp-local")
         names = await complete_profiles(type("Context", (), {"app": self.app})())
         self.assertIn("tcp-local", names)
         self.assertNotIn("ctmodbus-server", names)

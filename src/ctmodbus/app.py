@@ -23,6 +23,7 @@ from ctmodbus.proxy_commands import ProxyCommandMixin
 from ctmodbus.result_popups import result_title, show_result
 from ctmodbus.server import Server
 from ctmodbus.server_commands import ServerCommandMixin
+from ctmodbus.tag_deletion import TagDeletionMixin
 from ctmodbus.tags import TagCommandMixin, TagStore, parse_tag_document
 
 
@@ -32,6 +33,7 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
     ProxyCommandMixin,
     PollCommandMixin,
     ServerCommandMixin,
+    TagDeletionMixin,
     TagCommandMixin,
     ModbusCommandMixin,
     CtuiApp,
@@ -83,6 +85,8 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
         self.statusbar = self.connection_status
         self._device_dispatches = set()
         self._project_changing = False
+        self._prepared_tag_deletions = {}
+        self._tag_delete_task = None
         self._tag_import_task = None
         self._tag_mutations = set()
         self._prepared_tag_imports = {}
@@ -212,19 +216,23 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
             and self._poll_stdout is None
             and getattr(self, "app", None) is not None
         ):
-            task = asyncio.current_task()
-            self._result_popup_tasks.add(task)
-            try:
-                async with self._result_popup_lock:
-                    self._result_popup_task = task
-                    try:
-                        await show_result(title, result.output)
-                    finally:
-                        self._result_popup_task = None
-            finally:
-                self._result_popup_tasks.discard(task)
+            await self.present_result_popup(title, result.output)
             return replace(result, output=None, append_output=False)
         return result
+
+    async def present_result_popup(self, title: str, text: str) -> None:
+        """Serialize standard message dialogs and track their lifetime for shutdown."""
+        task = asyncio.current_task()
+        self._result_popup_tasks.add(task)
+        try:
+            async with self._result_popup_lock:
+                self._result_popup_task = task
+                try:
+                    await show_result(title, text)
+                finally:
+                    self._result_popup_task = None
+        finally:
+            self._result_popup_tasks.discard(task)
 
     # Lifecycle arbitration is intentionally centralized around command dispatch.
     async def dispatch_modbus(  # pylint: disable=too-many-branches,too-many-statements
@@ -332,6 +340,13 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
             "tags delete",
             "tags import",
         }
+        deleting = item.name == "tags delete"
+        if self._tag_delete_task is not None and (
+            project_change or tag_mutation or server_edit
+        ):
+            raise CommandError("Tag deletion is in progress; retry when it finishes")
+        if deleting and self._tag_mutations and self._tag_import_task is None:
+            raise CommandError("Tag edits are in progress; retry when they finish")
         if poll_start and self._poll_start_task is not None:
             raise CommandError("A poll is already starting")
         if (self.poller.active or self._poll_start_task is not None) and tag_mutation:
@@ -402,6 +417,8 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
             self._server_edit_task = task
         if tag_mutation:
             self._tag_mutations.add(task)
+        if deleting:
+            self._tag_delete_task = task
         if importing:
             self._tag_import_task = task
         if poll_start:
@@ -423,6 +440,10 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
         if component_stop:
             self._component_stop_task = task
         try:
+            if deleting:
+                rejected = await self.prepare_tag_deletion(text, kwargs)
+                if rejected is not None:
+                    return rejected
             if component_stop and self.server.proxy:
                 _, arguments = self.commands.resolve(text)
                 values = item.parse_args(arguments)
@@ -487,6 +508,9 @@ class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
                 self._prepared_server_imports.pop(task, None)
             if tag_mutation:
                 self._tag_mutations.discard(task)
+            if deleting:
+                self._tag_delete_task = None
+                self._prepared_tag_deletions.pop(task, None)
             if importing:
                 self._prepared_tag_imports.pop(task, None)
                 self._tag_import_task = None

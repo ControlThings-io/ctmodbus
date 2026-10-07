@@ -414,3 +414,27 @@ also drains services and closes project storage. The application implements
 keepalive before shutdown through its lifecycle hook, retaining ctui's parsing,
 sequential execution, error formatting, and backend ownership. Console Ctrl-C
 finishes async cleanup and exits 130 without printing a traceback.
+
+## D18 — Confirmed bulk tag deletion and server reference integrity
+
+Accepted and implemented, 2026-10-07, by explicit owner direction.
+
+Extend tags delete with exclusive NAME/--all targets. Bulk deletion requires
+standard Yes/No approval in TUI/WUI or --confirm in CLI; no tags is a no-op
+without a prompt. Saved server tag entries prevent single or bulk deletion
+unless --remove-server-rules explicitly removes those entries too. Rule removal
+requires approval. Keep raw ranges/defaults, identity, unit/seed settings, hooks,
+files and other configs unchanged. Retained hooks trigger a pre-approval warning
+about Python references that cannot be reliably analyzed; single deletion with
+hooks also needs approval. Results use the standard management MessageDialog.
+The owner's initial "only MessageDialog" wording was clarified to permit the
+usual Yes/No confirmation dialog; no two-step review command is implemented.
+
+Reserve project/tag/server changes across target resolution, approval, and commit.
+Retain the exact confirmed plan and reject a concurrently changed saved server
+config. Delete tags and update the server entry in a short separate SQLite
+transaction, without cancellation checkpoints, so unrelated framework commits
+cannot expose partial work. SQL failure rolls back both tables. Project metadata
+touch follows the data commit, matching the existing import policy; it is not
+part of the data transaction. Polling and the server must be stopped. Exported
+TOML and companion hook scripts remain untouched; importing can recreate tags.

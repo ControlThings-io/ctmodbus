@@ -195,6 +195,14 @@ random state and sequence clocks from the initial definition. Reset is disabled
 in proxy mode. Reset preserves saved settings and timestamped observations,
 including earlier proxy evidence. Raw evidence and initial values remain distinct.
 
+Tag deletion refuses names referenced by saved server tag entries. Use
+`tags delete NAME --remove-server-rules` or
+`tags delete --all --remove-server-rules` to remove both atomically, after
+confirmation (CLI requires `--confirm`). The server and polling must be stopped.
+Raw table rules, fallback settings and hooks are preserved; the confirmation
+warns about retained hooks that might reference deleted names. See
+[tag removal](../README.md#removing-tags).
+
 ## Optional Python hooks
 
 The [pump example](../examples/device.toml) references a companion

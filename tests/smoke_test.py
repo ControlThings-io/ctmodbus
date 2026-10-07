@@ -49,7 +49,7 @@ def main():
             assert command in groups.stdout
         app = ModbusApp(data_dir=directory)
         status = asyncio.run(
-            app.run_cli(["-c", "project", "-c", "configs show tcp-local"])
+            app.run_cli(["-c", "project", "-c", "project configs show tcp-local"])
         )
         assert status == 0
     print("Installed distribution smoke test passed")

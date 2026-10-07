@@ -162,6 +162,34 @@ Concurrent exports still assume sequential use. See the
 [documented concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
 before embedding concurrent tag-management or project-switching commands.
 
+### Removing tags
+
+Delete one tag with `tags delete NAME`, or all project tags with
+`tags delete --all`. The server and polling must be stopped. Bulk deletion
+requires a Yes/No confirmation in TUI/WUI, or explicit `--confirm` in CLI;
+an empty project reports "No tags to delete" without prompting. A name and
+`--all` cannot be combined.
+
+Saved server tag entries prevent deletion by default. The error lists referenced
+tags; add `--remove-server-rules` to remove those entries in the same atomic
+transaction. This also works for one tag and requires approval. Raw ranges,
+table defaults, identity, unit/seed settings and hooks stay unchanged. If hooks
+exist, the confirmation warns that Python references may need manual updates;
+companion scripts are never inspected or rewritten. Hook warnings also require
+approval for a single unreferenced tag.
+
+```text
+tags delete temperature
+tags delete temperature --remove-server-rules --confirm
+tags delete --all
+tags delete --all --remove-server-rules --confirm
+```
+
+Declining or cancelling approval changes nothing. Failures within the deletion transaction roll back
+both tag removal and server configuration changes. Completion uses the existing
+result MessageDialog in TUI/WUI. Exported TOML files remain unchanged; importing
+one later can recreate its tags.
+
 ## Polling
 
 Start one poll in the TUI or WUI; commands remain available while it runs.
@@ -303,8 +331,8 @@ records. Live connections are never persisted.
 
 ```text
 project
-configs list
-configs show tcp-local
+project configs list
+project configs show tcp-local
 client config load tcp-local
 client config show
 client config set --unit 7 --timeout 0.5

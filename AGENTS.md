@@ -69,6 +69,7 @@ Publishing requires release approval; pushing a version tag triggers publication
 - `src/ctmodbus/component_help.py`: example-led component help popup adapter.
 - `src/ctmodbus/connection.py`: settings, client factory, serialization, timeouts.
 - `src/ctmodbus/operations.py`: typed reads/writes, chunking, response validation.
+- `src/ctmodbus/tag_deletion.py`: deletion preparation, approval and server-rule policy.
 - `src/ctmodbus/tags.py`: project tag storage, codecs, commands, and TOML exchange.
 - `src/ctmodbus/discovery.py`: advisory serial/local-service discovery.
 - `src/ctmodbus/formatting.py`: timestamps and safe result rendering.

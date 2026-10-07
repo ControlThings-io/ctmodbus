@@ -240,6 +240,50 @@ class TagStore:
         await self.backend.connection.commit()
         await self.backend.touch()
 
+    async def delete_selected(
+        self, names, config_name, expected_config, replacement=None
+    ):
+        """Atomically delete exact names and optionally replace their server config.
+
+        Caller validates the replacement and reserves tag/project/server edits.
+        A separate SQLite transaction prevents unrelated ctui commits from
+        exposing partial changes. Reject a changed config or missing selected
+        row before committing; database errors roll back both tables. There are
+        no cancellation checkpoints during the short synchronous transaction.
+        Project metadata touch follows the commit, as for imports.
+        """
+        await self.ensure()
+        cursor = await self.backend.connection.execute("PRAGMA database_list")
+        path = next(row[2] for row in await cursor.fetchall() if row[1] == "main")
+        try:
+            with closing(sqlite3.connect(path, timeout=0)) as connection:
+                with connection:
+                    connection.execute("BEGIN IMMEDIATE")
+                    stored = connection.execute(
+                        "SELECT value FROM configs WHERE name = ?", (config_name,)
+                    ).fetchone()
+                    current = json.loads(stored[0]) if stored else None
+                    if current != expected_config:
+                        raise CommandError(
+                            "Server configuration changed; retry tag deletion"
+                        )
+                    for name in names:
+                        removed = connection.execute(
+                            "DELETE FROM tags WHERE name = ?", (name,)
+                        )
+                        if removed.rowcount != 1:
+                            raise CommandError(f"Tag {name!r} changed; retry deletion")
+                    if replacement is not None:
+                        connection.execute(
+                            "UPDATE configs SET value = ? WHERE name = ?",
+                            (json.dumps(replacement), config_name),
+                        )
+        except sqlite3.Error as error:
+            raise CommandError(
+                f"Tag deletion failed; tags and server rules were rolled back: {error}"
+            ) from error
+        await self.backend.touch()
+
     async def rename(self, name, new_name):
         """Rename NAME and return None without changing its definition.
 
@@ -601,11 +645,32 @@ class TagCommandMixin:
         await self.tags.rename(name, new_name)
         return CommandResult.append(f"Renamed tag {name!r} to {new_name!r}")
 
-    @command(name="tags delete", arguments={"name": Argument(completer=complete_tags)})
-    async def tag_delete(self, name: str):
-        """Delete a tag from the active project."""
-        await self.tags.delete(name)
-        return CommandResult.append(f"Deleted tag {name!r}")
+    @command(
+        name="tags delete",
+        arguments={
+            "name": Argument(help="Tag name; omit with --all", completer=complete_tags),
+            "all_tags": Argument(flags=("--all",)),
+            "remove_server_rules": Argument(flags=("--remove-server-rules",)),
+            "confirm": Argument(flags=("--confirm",)),
+        },
+    )
+    async def tag_delete(
+        self,
+        name: str | None = None,
+        all_tags: bool = False,
+        remove_server_rules: bool = False,
+        confirm: bool = False,
+    ):
+        """Delete NAME or --all, guarding saved server references and active work.
+
+        Bulk deletion and removal of referenced server rules require --confirm.
+        Dispatch obtains Yes/No approval in TUI/WUI and returns a MessageDialog
+        result. CLI requires --confirm. SQL changes commit together or roll back;
+        raw rules, hooks, configuration settings, and external files are retained.
+        """
+        return await self.delete_tag_definitions(
+            name, all_tags, remove_server_rules, confirm
+        )
 
     @command(
         name="read tags",

@@ -121,7 +121,7 @@ class ResultPopupTests(unittest.IsolatedAsyncioTestCase):
             "write tag",
             "poll tags",
             "poll raw",
-            "configs show",
+            "project configs show",
             "history export",
             "project import",
             "client",
