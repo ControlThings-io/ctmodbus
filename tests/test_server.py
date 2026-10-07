@@ -59,6 +59,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(load(path), config)
         sparse = validate(
             {
+                "format": "ctmodbus-server",
                 "version": 1,
                 "tables": {"coils": {"ranges": [{"start": 7, "value": True}]}},
             }
@@ -79,10 +80,18 @@ class ConfigTests(unittest.TestCase):
             },
         ):
             with self.subTest(rule=rule), self.assertRaises(CommandError):
-                validate({"tables": {"holding_registers": {"ranges": [rule]}}})
+                validate(
+                    {
+                        "format": "ctmodbus-server",
+                        "version": 1,
+                        "tables": {"holding_registers": {"ranges": [rule]}},
+                    }
+                )
         with self.assertRaises(CommandError):
             validate(
                 {
+                    "format": "ctmodbus-server",
+                    "version": 1,
                     "tags": {
                         "bad": {
                             "table": "holding_registers",
@@ -90,7 +99,7 @@ class ConfigTests(unittest.TestCase):
                             "type": "float32",
                             "value": 1.0,
                         }
-                    }
+                    },
                 }
             )
 
@@ -200,7 +209,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
 
     async def client(self, transport="tcp"):
         port = free_port(transport == "udp")
-        await self.app.dispatch(f"serve {transport} 127.0.0.1 --port {port}")
+        await self.app.dispatch(f"server start {transport} 127.0.0.1 --port {port}")
         cls = AsyncModbusTcpClient if transport == "tcp" else AsyncModbusUdpClient
         client = cls("127.0.0.1", port=port, timeout=0.5, retries=0)
         self.clients.append(client)
@@ -230,29 +239,29 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             )
             result = await client.read_device_information(device_id=1)
             self.assertEqual(result.information[0], b"ControlThings")
-            await self.app.dispatch("serve stop")
+            await self.app.dispatch("server stop --confirm")
 
     async def test_ui_configuration_export_and_import_confirmation(self):
         for text in (
-            "serve data clear --confirm",
+            "server config clear --confirm",
             "tags create level input_register 10 float32",
-            "serve data set tag level 12.5",
-            "serve data set holding_registers 100-199 42",
-            "serve data sequence holding_registers 7 10,20,30 --advance read",
-            "serve data table coils --unmapped default --default true",
+            "server config set tag level 12.5",
+            "server config set holding_registers 100-199 42",
+            "server config sequence holding_registers 7 10,20,30 --advance read",
+            "server config table coils --unmapped default --default true",
         ):
             await self.app.dispatch(text)
         path = Path(self.folder.name) / "device.toml"
-        await self.app.dispatch(f"serve data export {path}")
+        await self.app.dispatch(f"server config export {path}")
         original = await self.app.server_definition()
-        await self.app.dispatch("serve data clear --confirm")
-        await self.app.dispatch(f"serve data import {path}")
+        await self.app.dispatch("server config clear --confirm")
+        await self.app.dispatch(f"server config import {path}")
         self.assertEqual(await self.app.server_definition(), original)
         changed = copy.deepcopy(original)
         changed["tags"]["level"]["address"] = 20
         path.write_text(dumps(changed))
         with self.assertRaises(ConfirmationRequired):
-            await self.app.dispatch(f"serve data import {path}")
+            await self.app.dispatch(f"server config import {path}")
 
         async def approve(message):
             path.write_text(dumps(definition(False)))
@@ -260,16 +269,18 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 await self.app.dispatch("project create other")
             return True
 
-        await self.app.dispatch(f"serve data import {path}", confirm_callback=approve)
+        await self.app.dispatch(
+            f"server config import {path}", confirm_callback=approve
+        )
         self.assertEqual((await self.app.tags.get("level")).address, 20)
         self.assertEqual(
             (await self.app.server_definition())["tags"]["level"]["address"], 20
         )
 
     async def test_sparse_map_dynamic_rules_and_lifecycle_guards(self):
-        await self.app.dispatch("serve data clear --confirm")
+        await self.app.dispatch("server config clear --confirm")
         await self.app.dispatch(
-            "serve data sequence holding_registers 7 10,20 --advance read"
+            "server config sequence holding_registers 7 10,20 --advance read"
         )
         client = await self.client()
         self.assertEqual(
@@ -288,13 +299,23 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         for text in (
             "project create other",
-            "serve data clear --confirm",
+            "server config clear --confirm",
             "tags create x coil 0 bool",
         ):
             with self.assertRaises(CommandError):
                 await self.app.dispatch(text)
-        self.assertIn("7", (await self.app.dispatch("serve data show")).output)
-        await self.app.dispatch("serve data reset --confirm")
+        self.assertIn("7", (await self.app.dispatch("server status")).output)
+        retained = copy.deepcopy(self.app.server.state.rows)
+        saved = await self.app.server_definition()
+        await self.app.dispatch("server reset --confirm")
+        self.assertEqual(self.app.server.state.rows, retained)
+        self.assertEqual(await self.app.server_definition(), saved)
+        self.assertIn(
+            "sequence", (await self.app.dispatch("server config show")).output
+        )
+        self.assertNotIn(
+            "initial values / rules", (await self.app.dispatch("server status")).output
+        )
         self.assertEqual(
             (await client.read_holding_registers(7, count=1, device_id=1)).registers,
             [10],
@@ -305,13 +326,23 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         await upstream.serve_forever(background=True)
         port = upstream.transport.get_extra_info("sockname")[1]
         try:
-            await self.app.dispatch(f"connect udp 127.0.0.1 --port {port}")
+            await self.app.dispatch(f"client start udp 127.0.0.1 --port {port}")
             await self.app.dispatch("read holding_registers 0")
-            self.assertIn("17", (await self.app.dispatch("connect data show")).output)
-            await self.app.dispatch("serve data clear --confirm")
-            await self.app.dispatch("serve data unit 7")
+            self.assertIn("17", (await self.app.dispatch("client status")).output)
+            await self.app.dispatch("server config clear --confirm")
+            await self.app.dispatch("server config unit 7")
             client = await self.client()
-            await self.app.dispatch("proxy enable")
+            await self.app.dispatch("proxy start")
+            for component in ("client", "server"):
+                with self.assertRaises(ConfirmationRequired):
+                    await self.app.dispatch(f"{component} stop")
+                rejected = await self.app.dispatch(
+                    f"{component} stop", confirm_callback=lambda message: False
+                )
+                self.assertFalse(rejected.accepted)
+                self.assertTrue(self.app.server.proxy)
+                self.assertIsNotNone(self.app.server.listener)
+                self.assertTrue(self.app.connection.connected)
             self.assertEqual(
                 (
                     await client.read_holding_registers(0, count=1, device_id=7)
@@ -333,16 +364,19 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 ).registers,
                 [55],
             )
-            for text in ("serve data show", "connect data show"):
+            for text in ("server status", "client status"):
                 self.assertIn("55", (await self.app.dispatch(text)).output)
-            await self.app.dispatch("proxy disable")
+            await self.app.dispatch("proxy stop")
             self.assertEqual(
                 (
                     await client.read_holding_registers(0, count=1, device_id=7)
                 ).exception_code,
                 2,
             )
-            await self.app.dispatch("serve stop")
+            await self.app.dispatch("proxy start")
+            await self.app.dispatch("server stop --confirm")
+            self.assertFalse(self.app.server.proxy)
+            self.assertIsNone(self.app.server.listener)
             self.assertTrue(self.app.connection.connected)
         finally:
             await upstream.shutdown()
@@ -352,9 +386,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         await upstream.serve_forever(background=True)
         port = upstream.transport.sockets[0].getsockname()[1]
         try:
-            await self.app.dispatch(f"connect tcp 127.0.0.1 --port {port}")
+            await self.app.dispatch(f"client start tcp 127.0.0.1 --port {port}")
             client = await self.client()
-            await self.app.dispatch("proxy enable")
+            await self.app.dispatch("proxy start")
 
             async def change(response):
                 response.registers = [80]
@@ -369,12 +403,17 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 self.app.server.state.rows["holding_registers", 0]["read"], 80
             )
-            await self.app.dispatch("close")
+            self.app.connection.abort()
             self.assertEqual(
                 (
                     await client.read_holding_registers(0, count=1, device_id=1)
                 ).exception_code,
                 11,
+            )
+            await self.app.dispatch("client stop --confirm")
+            self.assertFalse(self.app.server.proxy)
+            self.assertFalse(
+                (await client.read_holding_registers(0, count=1, device_id=1)).isError()
             )
         finally:
             await upstream.shutdown()
@@ -384,20 +423,20 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         path.write_text(
             "def on_write(device, tag, value):\n    device.set('running', value)\n    raise ValueError('intentional failure')\n\ndef on_tick(device, elapsed):\n    device.set('running', True)\n"
         )
-        await self.app.dispatch("serve data clear --confirm")
+        await self.app.dispatch("server config clear --confirm")
         await self.app.dispatch("tags create enable coil 0 bool")
         await self.app.dispatch("tags create running discrete_input 0 bool")
-        await self.app.dispatch("serve data set tag enable false")
-        await self.app.dispatch("serve data set tag running false")
-        await self.app.dispatch(f"serve hook write {path} on_write")
-        await self.app.dispatch(f"serve hook tick {path} on_tick --interval 0.02")
-        await self.app.dispatch("serve data validate")
+        await self.app.dispatch("server config set tag enable false")
+        await self.app.dispatch("server config set tag running false")
+        await self.app.dispatch(f"server hook write {path} on_write")
+        await self.app.dispatch(f"server hook tick {path} on_tick --interval 0.02")
+        await self.app.dispatch("server config validate")
         client = await self.client()
         response = await client.write_coil(0, True, device_id=1)
         self.assertEqual(response.exception_code, 4)
         self.assertFalse((await client.read_coils(0, count=1, device_id=1)).bits[0])
         self.assertIn(
-            "intentional failure", (await self.app.dispatch("serve status")).output
+            "intentional failure", (await self.app.dispatch("server status")).output
         )
 
         async def tick_done():
@@ -411,7 +450,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             (await client.read_discrete_inputs(0, count=1, device_id=1)).bits[0]
         )
         path_export = Path(self.folder.name) / "exported.toml"
-        await self.app.dispatch(f"serve data export {path_export}")
+        await self.app.dispatch(f"server config export {path_export}")
         self.assertEqual(load(path_export)["hooks"]["module"], str(path))
 
     async def test_raw_invalid_count_and_pipelined_transactions(self):
@@ -445,10 +484,10 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             occupied.bind(("127.0.0.1", port))
             occupied.listen()
             with self.assertRaises(CommandError):
-                await self.app.dispatch(f"serve tcp 127.0.0.1 --port {port}")
+                await self.app.dispatch(f"server start tcp 127.0.0.1 --port {port}")
         self.assertIsNone(self.app.server.listener)
         task = asyncio.create_task(
-            self.app.dispatch(f"serve tcp 127.0.0.1 --port {port} --foreground")
+            self.app.dispatch(f"server start tcp 127.0.0.1 --port {port} --foreground")
         )
 
         async def started():
@@ -457,7 +496,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
 
         await asyncio.wait_for(started(), 1)
         self.assertFalse(task.done())
-        await self.app.dispatch("serve stop")
+        await self.app.dispatch("server stop --confirm")
         await asyncio.wait_for(task, 1)
         self.assertIsNone(self.app.server.listener)
 
@@ -491,7 +530,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         port = free_port()
         await self.app.dispatch(
-            f"serve tls 127.0.0.1 --port {port} --cert-file {cert} --key-file {key}"
+            f"server start tls 127.0.0.1 --port {port} --cert-file {cert} --key-file {key}"
         )
         context = ssl.create_default_context(cafile=str(cert))
         client = AsyncModbusTlsClient(
@@ -504,9 +543,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             [0],
         )
         client.close()
-        await self.app.dispatch("serve stop")
+        await self.app.dispatch("server stop --confirm")
         await self.app.dispatch(
-            f"serve tls 127.0.0.1 --port {port} --cert-file {cert} --key-file {key} --ca-file {cert}"
+            f"server start tls 127.0.0.1 --port {port} --cert-file {cert} --key-file {key} --ca-file {cert}"
         )
         context.load_cert_chain(str(cert), str(key))
         client = AsyncModbusTlsClient(
@@ -540,7 +579,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             loop.add_reader(second, forward, second, first)
             peer = None
             try:
-                await self.app.dispatch(f"serve {transport} {os.ttyname(a)}")
+                await self.app.dispatch(f"server start {transport} {os.ttyname(a)}")
                 peer = AsyncModbusSerialClient(
                     os.ttyname(b),
                     framer=FramerType.RTU if transport == "rtu" else FramerType.ASCII,
@@ -561,15 +600,15 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 peer.close()
                 peer = None
                 # Turn the serial peer into an upstream device and proxy TCP to it.
-                await self.app.dispatch("serve stop")
+                await self.app.dispatch("server stop --confirm")
                 upstream = make_server(transport, os.ttyname(a))
                 await upstream.serve_forever(background=True)
                 try:
                     await self.app.dispatch(
-                        f"connect {transport} {os.ttyname(b)} --timeout 1"
+                        f"client start {transport} {os.ttyname(b)} --timeout 1"
                     )
                     downstream = await self.client()
-                    await self.app.dispatch("proxy enable")
+                    await self.app.dispatch("proxy start")
                     self.assertEqual(
                         (
                             await downstream.read_holding_registers(
@@ -578,8 +617,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                         ).registers,
                         [17],
                     )
-                    await self.app.dispatch("serve stop")
-                    await self.app.dispatch("close")
+                    await self.app.dispatch("server stop --confirm")
+                    await self.app.dispatch("client stop --confirm")
                 finally:
                     await upstream.shutdown()
             finally:
@@ -594,17 +633,17 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
     async def test_client_state_session_reset_and_write_evidence(self):
         client = await self.client()
         port = self.app.server.listener.transport.sockets[0].getsockname()[1]
-        await self.app.dispatch(f"connect tcp 127.0.0.1 --port {port}")
+        await self.app.dispatch(f"client start tcp 127.0.0.1 --port {port}")
         await self.app.dispatch("write holding_registers 3 42")
         row = self.app.client_state.rows["holding_registers", 3]
         self.assertNotIn("read", row)
         self.assertIn("acknowledged", row["outcome"])
         await self.app.dispatch("read holding_registers 3")
         self.assertEqual(row["read"], 42)
-        await self.app.dispatch("close")
-        await self.app.dispatch(f"connect tcp 127.0.0.1 --port {port}")
+        await self.app.dispatch("client stop --confirm")
+        await self.app.dispatch(f"client start tcp 127.0.0.1 --port {port}")
         self.assertEqual(self.app.client_state.rows, {})
-        await self.app.dispatch("close")
+        await self.app.dispatch("client stop --confirm")
         with self.assertRaises(CommandError):
             await self.app.dispatch("write holding_registers 3 99")
         self.assertEqual(
@@ -622,7 +661,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("SERVER #1 peer=", lines[1])
         self.assertIn("unit=1 read holding_registers 0-1", lines[1])
         self.assertRegex(lines[1], r"^\d{4}-\d\d-\d\dT.*\+00:00 SERVER")
-        await self.app.dispatch("serve logging off")
+        await self.app.dispatch("server logging off")
         self.app.output_text = "Quiet"
         await client.read_coils(0, count=1, device_id=1)
         self.assertEqual(self.app.output_text, "Quiet")
@@ -639,9 +678,9 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(records), 3)
         self.assertEqual([row.decoded["request_id"] for row in records], [1, 2, 3])
-        await self.app.dispatch("serve logging on")
+        await self.app.dispatch("server logging on")
         self.assertIn(
-            "Request logging: on", (await self.app.dispatch("serve status")).output
+            "Request logging: on", (await self.app.dispatch("server status")).output
         )
 
     async def test_proxy_lines_independent_quiet_and_failure(self):
@@ -650,22 +689,24 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         await upstream.serve_forever(background=True)
         port = upstream.transport.sockets[0].getsockname()[1]
         try:
-            await self.app.dispatch(f"connect tcp 127.0.0.1 --port {port}")
-            await self.app.dispatch("serve data unit 7")
+            await self.app.dispatch(f"client start tcp 127.0.0.1 --port {port}")
+            await self.app.dispatch("server config unit 7")
             downstream = free_port()
-            await self.app.dispatch(f"serve tcp 127.0.0.1 --port {downstream} --quiet")
+            await self.app.dispatch(
+                f"server start tcp 127.0.0.1 --port {downstream} --quiet"
+            )
             client = AsyncModbusTcpClient(
                 "127.0.0.1", port=downstream, timeout=0.5, retries=0
             )
             self.clients.append(client)
             self.assertTrue(await client.connect())
-            await self.app.dispatch("proxy enable")
+            await self.app.dispatch("proxy start")
             self.app.output_text = ""
             await client.read_holding_registers(0, count=1, device_id=7)
             self.assertNotIn("SERVER", self.app.output_text)
             self.assertIn("PROXY  #1 upstream=TCP", self.app.output_text)
             self.assertIn("unit=1 read holding_registers 0", self.app.output_text)
-            await self.app.dispatch("serve logging on")
+            await self.app.dispatch("server logging on")
             await self.app.dispatch("proxy logging off")
             self.app.output_text = ""
             await client.read_holding_registers(0, count=1, device_id=7)
@@ -677,8 +718,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("SERVER #3", self.app.output_text)
             self.assertIn("PROXY  #3", self.app.output_text)
             self.assertEqual(self.app.output_text.count("values=0071"), 2)
-            await self.app.dispatch("proxy enable --quiet")
-            await self.app.dispatch("serve logging off")
+            await self.app.dispatch("proxy start --quiet")
+            await self.app.dispatch("server logging off")
             self.app.output_text = ""
             await client.read_holding_registers(1000, count=1, device_id=7)
             self.assertIn("PROXY  #4 ERROR upstream exception=2", self.app.output_text)
@@ -704,8 +745,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.app.server.log_line("SERVER", 99, "ERROR bad\n\x1b[31m")
         self.assertIn(r"ERROR bad\n\x1b[31m", self.app.output_text)
-        await self.app.dispatch("serve logging off")
-        await self.app.dispatch("serve stop")
+        await self.app.dispatch("server logging off")
+        await self.app.dispatch("server stop --confirm")
         await self.client()
         self.assertTrue(self.app.server.request_logging)
 

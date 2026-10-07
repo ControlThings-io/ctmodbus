@@ -164,7 +164,7 @@ class Poll:  # pylint: disable=protected-access
         if count is not None and (type(count) is not int or count < 1):
             raise CommandError("count must be a positive integer")
         if not self.app.connection.connected:
-            raise CommandError("No connected session; connect first")
+            raise CommandError("No connected session; use client start first")
         self.columns = tuple(columns)
         self.table = PollTable(self.columns, count)
         self.interval, self.count, self.duration = interval, count, duration

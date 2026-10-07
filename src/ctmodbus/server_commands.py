@@ -27,7 +27,7 @@ from ctmodbus.connection import ConnectionSettings
 from ctmodbus.simulation import Simulator
 from ctmodbus.tags import decode_tag_value, encode_tag_value, parse_tag_value
 
-CONFIG_NAME = "ctmodbus-server"
+CONFIG_NAME = server_config.CONFIG_NAME
 PATH_ARG = {"path": Argument(help="Server TOML file", completer=PathCompleter())}
 TARGET_ARGS = {
     "target": Argument(help="Modbus table name or tag"),
@@ -96,10 +96,10 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         return None
 
     @command(
-        name="serve data import",
+        name="server config import",
         arguments={**PATH_ARG, "replace": Argument(flags=("--replace",))},
     )
-    async def serve_data_import(self, path: Path, replace: bool = False):
+    async def server_config_import(self, path: Path, replace: bool = False):
         """Replace server definition and merge its tags after conflict confirmation."""
         config = self._prepared_server_imports.get(asyncio.current_task())
         if config is None:
@@ -134,16 +134,17 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         await self.backend.touch()
         return f"Imported server definition with {len(tags)} tags."
 
-    @command(name="serve data export", arguments=PATH_ARG)
-    async def serve_data_export(self, path: Path):
+    @command(name="server config export", arguments=PATH_ARG)
+    async def server_config_export(self, path: Path):
         """Export definition and referenced tags, not live values or Python source."""
         destination = server_config.export(await self.server_definition(), path)
         return f"Exported server definition to {destination}."
 
     @command(
-        name="serve data clear", arguments={"confirm": Argument(flags=("--confirm",))}
+        name="server config clear",
+        arguments={"confirm": Argument(flags=("--confirm",))},
     )
-    async def serve_data_clear(self, confirm: bool = False):
+    async def server_config_clear(self, confirm: bool = False):
         """Replace server configuration with an empty address map; keep project tags."""
         if not confirm:
             raise CommandError("Use --confirm to clear the server definition")
@@ -153,10 +154,10 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         )
 
     @command(
-        name="serve data unit",
+        name="server config unit",
         arguments={"unit": Argument(help="Server unit ID, 1–247")},
     )
-    async def serve_data_unit(self, unit: int):
+    async def server_config_unit(self, unit: int):
         """Set the server unit ID independently of the connected client unit."""
         config = await self.server_definition()
         config["unit"] = unit
@@ -164,10 +165,10 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         return f"Server unit set to {unit}."
 
     @command(
-        name="serve data seed",
+        name="server config seed",
         arguments={"seed": Argument(help="Reproducible random seed")},
     )
-    async def serve_data_seed(self, seed: int):
+    async def server_config_seed(self, seed: int):
         """Set the random seed used for each new local server run."""
         config = await self.server_definition()
         config["seed"] = seed
@@ -175,13 +176,13 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         return f"Server seed set to {seed}."
 
     @command(
-        name="serve data identity",
+        name="server config identity",
         arguments={
             name: Argument(flags=("--" + name,))
             for name in ("vendor", "product", "revision")
         },
     )
-    async def serve_data_identity(
+    async def server_config_identity(
         self,
         vendor: str = "ControlThings",
         product: str = "ctmodbus simulator",
@@ -198,14 +199,14 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         return "Server identification updated."
 
     @command(
-        name="serve data table",
+        name="server config table",
         arguments={
             "table": Argument(help="Modbus table"),
             "unmapped": Argument(flags=("--unmapped",)),
             "default": Argument(flags=("--default",)),
         },
     )
-    async def serve_data_table(
+    async def server_config_table(
         self,
         table: Literal[
             "coils", "discrete_inputs", "input_registers", "holding_registers"
@@ -274,24 +275,24 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         return f"Set {rule['mode']} behavior for {target} {selection}."
 
     @command(
-        name="serve data set",
+        name="server config set",
         arguments={**TARGET_ARGS, "value": Argument(help="Initial scalar value")},
     )
-    async def serve_data_set(self, target: str, selection: str, value: str):
+    async def server_config_set(self, target: str, selection: str, value: str):
         """Set initial tag or raw range values, replacing matching dynamic rules."""
         return await self.set_server_rule(
             target, selection, {"mode": "static", "value": value}
         )
 
     @command(
-        name="serve data random",
+        name="server config random",
         arguments={
             **TARGET_ARGS,
             "minimum": Argument(flags=("--min",)),
             "maximum": Argument(flags=("--max",)),
         },
     )
-    async def serve_data_random(
+    async def server_config_random(
         self, target: str, selection: str, minimum: str = "0", maximum: str = "1"
     ):
         """Generate bounded values on each successful read; writes do not disable
@@ -302,7 +303,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         )
 
     @command(
-        name="serve data sequence",
+        name="server config sequence",
         arguments={
             **TARGET_ARGS,
             "values": Argument(help="Comma-separated sequence values"),
@@ -311,7 +312,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             "repeat": Argument(flags=("--repeat",)),
         },
     )
-    async def serve_data_sequence(
+    async def server_config_sequence(
         self,
         target: str,
         selection: str,
@@ -343,48 +344,48 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             )
         config["hooks"].update(module=path, **{name: function})
         if interval is not None:
-            config["hooks"]["tick_seconds"] = interval
+            config["hooks"]["tick_interval_seconds"] = interval
         await self.save_server_definition(config)
         return f"Configured {name}: {function}."
 
     @command(
-        name="serve hook read",
+        name="server hook read",
         arguments={
             "module": Argument(help="Companion Python file", completer=PathCompleter()),
             "function": Argument(help="Read hook function name"),
         },
     )
-    async def serve_hook_read(self, module: Path, function: str):
+    async def server_hook_read(self, module: Path, function: str):
         """Attach on_read(device, tag_names), once per local read request."""
         return await self.set_server_hook("on_read", module, function)
 
     @command(
-        name="serve hook write",
+        name="server hook write",
         arguments={
             "module": Argument(help="Companion Python file", completer=PathCompleter()),
             "function": Argument(help="Write hook function name"),
         },
     )
-    async def serve_hook_write(self, module: Path, function: str):
+    async def server_hook_write(self, module: Path, function: str):
         """Attach on_write(device, tag_name, value) for complete successful tag
         writes.
         """
         return await self.set_server_hook("on_write", module, function)
 
     @command(
-        name="serve hook tick",
+        name="server hook tick",
         arguments={
             "module": Argument(help="Companion Python file", completer=PathCompleter()),
             "function": Argument(help="Tick hook function name"),
             "interval": Argument(flags=("--interval",)),
         },
     )
-    async def serve_hook_tick(self, module: Path, function: str, interval: float = 1):
+    async def server_hook_tick(self, module: Path, function: str, interval: float = 1):
         """Attach on_tick(device, elapsed_seconds) for periodic local updates."""
         return await self.set_server_hook("on_tick", module, function, interval)
 
-    @command(name="serve hook clear")
-    async def serve_hook_clear(self):
+    @command(name="server hook clear")
+    async def server_hook_clear(self):
         """Remove all companion hooks from the stopped server definition."""
         config = await self.server_definition()
         config["hooks"] = {}
@@ -401,8 +402,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                     "remove or reconfigure its rule"
                 )
 
-    @command(name="serve data remove", arguments=TARGET_ARGS)
-    async def serve_data_remove(self, target: str, selection: str):
+    @command(name="server config remove", arguments=TARGET_ARGS)
+    async def server_config_remove(self, target: str, selection: str):
         """Remove a tag rule or raw ranges, retaining tags and table fallback."""
         config = await self.server_definition()
         if target == "tag":
@@ -425,8 +426,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         await self.save_server_definition(config)
         return "Server rules removed."
 
-    @command(name="serve data validate")
-    async def serve_data_validate(self):
+    @command(name="server config validate")
+    async def server_config_validate(self):
         """Check configuration and trusted hook callables without opening a listener."""
         config = await self.server_definition()
         await self.validate_server_tags(config)
@@ -436,21 +437,14 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             "Listener binding and hook behavior are not tested."
         )
 
-    @command(name="serve data show")
-    async def serve_data_show(self):
-        """Display committed state without observing a hook's pending transaction."""
-        async with self.server.request_lock:
-            return await self.show_server_data()
+    @command(name="server config show")
+    async def server_config_show(self):
+        """Show saved initial values and rules, separate from runtime evidence."""
+        return server_config.dumps(await self.server_definition())
 
     async def show_server_data(self):
-        """Show definition, local tag state and downstream observations without
-        device I/O.
-        """
-        config = await self.server_definition()
-        lines = [
-            "Server definition (initial values / rules):",
-            server_config.dumps(config),
-        ]
+        """Show local static tag values and retained downstream evidence without I/O."""
+        lines = []
         if self.server.simulator is not None:
             lines.append(
                 "Current local static tag values (separate from proxy observations):"
@@ -467,18 +461,6 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                     lines.append(f"{name} = {decode_tag_value(tag, raw)!r}")
         lines.append(self.server.state.show(await self.tags.list()))
         return "\n".join(lines)
-
-    @command(name="connect data show")
-    async def connect_data_show(self):
-        """Show last read/write evidence, without issuing requests or treating
-        writes as readback.
-        """
-        heading = (
-            "Connected"
-            if self.connection.connected
-            else "Disconnected; last session evidence retained"
-        )
-        return heading + "\n" + self.client_state.show(await self.tags.list())
 
     async def start_server(self, settings, foreground=False, quiet=False, **tls):
         """Start in background for TUI, or wait until stopped in explicit
@@ -498,8 +480,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                 await self.server.stop()
         return CommandResult.append(f"Server {self.server.label}")
 
-    @command(name="serve tcp", arguments=NETWORK_ARGS)
-    async def serve_tcp(
+    @command(name="server start tcp", arguments=NETWORK_ARGS)
+    async def server_start_tcp(
         self,
         host: str = "127.0.0.1",
         port: int = 5020,
@@ -511,8 +493,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             ConnectionSettings("tcp", host, port=port), foreground, quiet=quiet
         )
 
-    @command(name="serve udp", arguments=NETWORK_ARGS)
-    async def serve_udp(
+    @command(name="server start udp", arguments=NETWORK_ARGS)
+    async def server_start_udp(
         self,
         host: str = "127.0.0.1",
         port: int = 5020,
@@ -525,7 +507,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         )
 
     @command(
-        name="serve tls",
+        name="server start tls",
         arguments={
             **NETWORK_ARGS,
             **{
@@ -534,7 +516,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             },
         },
     )
-    async def serve_tls(
+    async def server_start_tls(
         self,
         host: str = "127.0.0.1",
         port: int = 8020,
@@ -554,8 +536,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             ca_file=ca_file,
         )
 
-    @command(name="serve rtu", arguments=SERIAL_ARGS)
-    async def serve_rtu(
+    @command(name="server start rtu", arguments=SERIAL_ARGS)
+    async def server_start_rtu(
         self,
         device: str,
         baudrate: int = 9600,
@@ -579,8 +561,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             quiet=quiet,
         )
 
-    @command(name="serve ascii", arguments=SERIAL_ARGS)
-    async def serve_ascii(
+    @command(name="server start ascii", arguments=SERIAL_ARGS)
+    async def server_start_ascii(
         self,
         device: str,
         baudrate: int = 9600,
@@ -604,29 +586,31 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             quiet=quiet,
         )
 
-    @command(name="serve stop")
-    async def serve_stop(self):
-        """Stop the listener and drain local/proxy work; keep the client connection."""
+    @command(name="server stop", arguments={"confirm": Argument(flags=("--confirm",))})
+    async def server_stop(
+        self, confirm: bool = False
+    ):  # pylint: disable=unused-argument
+        """Stop the listener; dispatch confirms proxy stops; retain the client."""
         await self.server.stop()
         return "Server stopped."
 
-    @command(name="serve status")
-    async def serve_status(self):
+    @command(name="server status")
+    async def server_status(self):
         """Show listener, proxy mode and the last hook/transport/storage error."""
         mode = "proxy" if self.server.proxy else "local"
+        async with self.server.request_lock:
+            data = await self.show_server_data()
         return (
             f"Server: {self.server.label}\nMode: {mode}\n"
             f"Request logging: {'on' if self.server.request_logging else 'off'}\n"
             f"Proxy logging: {'on' if self.server.proxy_logging else 'off'}\n"
-            f"Last error: {self.server.last_error or 'none'}"
+            f"Last error: {self.server.last_error or 'none'}\n{data}"
         )
 
-    @command(
-        name="serve data reset", arguments={"confirm": Argument(flags=("--confirm",))}
-    )
-    async def serve_data_reset(self, confirm: bool = False):
+    @command(name="server reset", arguments={"confirm": Argument(flags=("--confirm",))})
+    async def server_reset(self, confirm: bool = False):
         """Reset local runtime values, random seed and sequences; leave proxy
-        evidence alone.
+        evidence alone. Last observations stay timestamped historical evidence.
         """
         if not confirm:
             raise CommandError("Use --confirm to reset local simulation state")
@@ -635,67 +619,15 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         async with self.server.request_lock:
             current = self.server.simulator
             self.server.simulator = Simulator(current.config, current.hooks)
-        self.server.state.rows.clear()
         return "Local simulation reset."
 
-    @command(name="proxy enable", arguments={"quiet": Argument(flags=("--quiet",))})
-    async def proxy_enable(self, quiet: bool = False):
-        """Forward server-unit requests to the connected unit; local rules are
-        bypassed.
-        """
-        if self.server.listener is None or not self.connection.connected:
-            raise CommandError("Proxy requires a running server and a connected client")
-        if self.connection.settings.retries:
-            raise CommandError("Proxy requires a client connection with --retries 0")
-        settings = self.connection.settings
-        if self.server.endpoint and settings.transport in ("tcp", "udp", "tls"):
-            target, port = self.server.endpoint
-            local_names = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "::"}
-            if port == settings.port and (
-                target == settings.target
-                or (target in local_names and settings.target in local_names)
-            ):
-                raise CommandError("Proxy cannot forward to its own listener")
-        self.server.proxy = True
-        self.server.proxy_logging = not quiet
-        return "Proxy enabled. New requests use the upstream device."
-
-    @command(name="proxy disable")
-    async def proxy_disable(self):
-        """Return new requests to local behavior; already-routed exchanges finish
-        normally.
-        """
-        self.server.proxy = False
-        return "Proxy disabled. New requests use local simulation."
-
-    @command(name="proxy status")
-    async def proxy_status(self):
-        """Show forwarding mode and upstream connection readiness."""
-        mode = "enabled" if self.server.proxy else "disabled"
-        upstream = "connected" if self.connection.connected else "unavailable"
-        return (
-            f"Proxy: {mode}\nUpstream: {upstream}\n"
-            f"Logging: {'on' if self.server.proxy_logging else 'off'}"
-        )
-
     @command(
-        name="serve logging",
+        name="server logging",
         arguments={
             "state": Argument(help="Enable or disable routine server request lines")
         },
     )
-    def serve_logging(self, state: Literal["on", "off"]):
+    def server_logging(self, state: Literal["on", "off"]):
         """Change server verbosity; errors remain visible and records unchanged."""
         self.server.request_logging = state == "on"
         return CommandResult.append(f"Server request logging {state}.")
-
-    @command(
-        name="proxy logging",
-        arguments={
-            "state": Argument(help="Enable or disable routine proxy forwarding lines")
-        },
-    )
-    def proxy_logging(self, state: Literal["on", "off"]):
-        """Change live forwarding verbosity independently of server arrival logging."""
-        self.server.proxy_logging = state == "on"
-        return CommandResult.append(f"Proxy request logging {state}.")

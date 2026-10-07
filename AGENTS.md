@@ -35,6 +35,10 @@ Give every new positional `@command` argument a brief, meaningful
 completion rows; when individual choices need distinct explanations, use the
 choices mapping or explicit `CompletionItem` help instead.
 
+Larger commands follow **component → action → transport or target**; use
+client/server/proxy groups for future component features. ctui-owned command
+names and configuration fields remain framework-owned.
+
 ## Commands and verification
 
 ```bash
@@ -57,8 +61,11 @@ Publishing requires release approval; pushing a version tag triggers publication
 
 ## Code map
 
-- `src/ctmodbus/app.py`: lifecycle, connection commands, profiles, project guards,
+- `src/ctmodbus/app.py`: lifecycle, dispatch arbitration, project guards,
   records, progress, cancellation, and shutdown.
+- `src/ctmodbus/client_commands.py`: client lifecycle and selected configuration.
+- `src/ctmodbus/proxy_commands.py`: proxy lifecycle and logging controls.
+- `src/ctmodbus/component_help.py`: example-led component help popup adapter.
 - `src/ctmodbus/connection.py`: settings, client factory, serialization, timeouts.
 - `src/ctmodbus/operations.py`: typed reads/writes, chunking, response validation.
 - `src/ctmodbus/tags.py`: project tag storage, codecs, commands, and TOML exchange.

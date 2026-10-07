@@ -33,6 +33,8 @@ from tabulate import tabulate
 
 from ctmodbus.formatting import timestamp
 
+TAG_FIELDS = {"table", "address", "type", "byte_order", "word_order"}
+
 TABLES = ("coils", "discrete_inputs", "input_registers", "holding_registers")
 CREATE_TABLES = {
     "coil": "coils",
@@ -431,8 +433,16 @@ def parse_tag_document(path):
             document = tomllib.load(stream)
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise CommandError(f"Cannot import tags: {error}") from error
-    if document.get("format") != "ctmodbus-tags" or document.get("version") != 1:
-        raise CommandError("Unsupported tag export format")
+    unknown = set(document) - {"format", "version", "tags"}
+    if unknown:
+        raise CommandError(
+            f"Unknown tag export keys: {', '.join(sorted(unknown))}. "
+            "Allowed keys: format, version, tags"
+        )
+    if document.get("format") != "ctmodbus-tags":
+        raise CommandError('Tag export requires format = "ctmodbus-tags"')
+    if type(document.get("version")) is not int or document["version"] != 1:
+        raise CommandError("Tag export requires integer version = 1")
     definitions = document.get("tags")
     if not isinstance(definitions, dict):
         raise CommandError("Tag export must contain a tags table")
@@ -440,13 +450,7 @@ def parse_tag_document(path):
     for name, values in definitions.items():
         if not isinstance(values, dict):
             raise CommandError(f"Tag {name!r} must be a TOML table")
-        unknown = set(values) - {
-            "table",
-            "address",
-            "type",
-            "byte_order",
-            "word_order",
-        }
+        unknown = set(values) - TAG_FIELDS
         if unknown:
             raise CommandError(
                 f"Tag {name!r} has unknown fields: {', '.join(sorted(unknown))}"

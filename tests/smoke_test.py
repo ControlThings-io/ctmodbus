@@ -22,18 +22,30 @@ def main():
         ["ctmodbus", "--help"], check=True, capture_output=True, text=True
     )
     assert "read" in result.stdout
-    assert "profile" in result.stdout
-    assert "serve" in result.stdout
+    assert "client" in result.stdout
+    assert "server" in result.stdout
     assert "proxy" in result.stdout
     with tempfile.TemporaryDirectory() as directory:
         groups = subprocess.run(
-            ["ctmodbus", "-c", "help read", "-c", "help profile", "-c", "help serve"],
+            [
+                "ctmodbus",
+                "-c",
+                "help read",
+                "-c",
+                "help client",
+                "-c",
+                "help server",
+                "-c",
+                "help client start",
+                "-c",
+                "help server start",
+            ],
             check=True,
             capture_output=True,
             text=True,
             env={**os.environ, "XDG_DATA_HOME": directory},
         )
-        for command in ("holding_registers", "connect", "tcp", "rtu", "data"):
+        for command in ("holding_registers", "start", "config", "status", "tcp", "rtu"):
             assert command in groups.stdout
         app = ModbusApp(data_dir=directory)
         status = asyncio.run(

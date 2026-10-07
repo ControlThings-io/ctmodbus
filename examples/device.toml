@@ -1,4 +1,5 @@
 # ctmodbus pump/tank server configuration.
+format = "ctmodbus-server"
 version = 1
 unit = 1
 
@@ -51,4 +52,4 @@ value = 100.0
 module = "device_logic.py"
 on_write = "on_write"
 on_tick = "on_tick"
-tick_seconds = 1.0
+tick_interval_seconds = 1.0

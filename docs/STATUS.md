@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-06, `dev-v1.0.0` at `aad20cd`, with local server/proxy
-request logging, quiet controls, and shared runtime output appends.
+Last reconciled: 2026-10-06, `dev-v1.0.0` at `5ffde8c`, with the local
+component command/configuration/TOML refactor. Changes remain uncommitted.
 
 ## Current state
 
@@ -44,12 +44,12 @@ request logging, quiet controls, and shared runtime output appends.
   Each cycle appends one aligned typed/raw row headed by `#`, with separators
   between all columns and repeated headers on width expansion. Busy ticks are
   skipped and partial reads remain recorded. CLI polling streams and waits.
-  Targets are stable and cancel/close/shutdown stop polling. See
+  Targets are stable and client stop/shutdown stop polling. See
   [Polling](../README.md#polling) and [D14](DECISIONS.md#d14--fixed-cadence-polling-and-appended-evidence-rows).
 
 - Server request arrivals and proxy forwarding now append correlated UTC lines
-  by default. Every listener and `proxy enable` support `--quiet`; independent
-  live `serve logging` / `proxy logging` switches suppress routine lines while
+  by default. Every listener and `proxy start` support `--quiet`; independent
+  live `server logging` / `proxy logging` switches suppress routine lines while
   preserving errors and operation records. Status shows logging state; write
   previews are bounded and records retain full payloads. See
   [request display controls](SERVER.md#request-display-controls) and
@@ -58,6 +58,20 @@ request logging, quiet controls, and shared runtime output appends.
   command output follows existing per-command behavior; runtime request/polling
   lines explicitly append. ctui built-in commands remain unchanged.
 
+- Component commands now follow client/server/proxy start/stop/status, with
+  client discover, selected client config show/set/save/load, server config/hook
+  editing, and server reset. Loading settings requires an explicit client start.
+  Stop confirmations protect active proxy routing; bare groups show example
+  help popups. Legacy aliases are removed; ctui-owned commands/fields remain
+  unchanged. Server reset retains timestamped observations. See
+  [D16](DECISIONS.md#d16--component-commands-selected-client-settings-and-strict-toml)
+  and [README usage](../README.md#projects-profiles-and-records).
+- Server/tag TOML now require exact format/version markers and reject unknown
+  nested/top-level keys. Server stays version 1 and uses `tick_interval_seconds`.
+  Existing unreleased server configs need explicit format/key updates or
+  clear/reimport. Client/proxy commands have dedicated modules; shared lifecycle
+  arbitration remains in app.py.
+
 ## Next steps and validation gaps
 
 1. Multi-tag serialization/partial output and tag-import confirmation, atomic
@@ -65,7 +79,9 @@ request logging, quiet controls, and shared runtime output appends.
    reset integration and optional file-I/O/export improvements; adjacent-read
    batching remains future work. These are not release feature commitments.
    ctui enhancements listed there remain proposals, not dependency commitments.
-2. Exercise tag completion, collision confirmation, and typed output in a real
+2. Manually exercise component overviews, option completion, client config
+   editing/loading, and proxy stop confirmation in a real terminal/browser.
+   Exercise tag completion, collision confirmation, and typed output in a real
    terminal; verify USB metadata on physical serial ports.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
@@ -84,6 +100,28 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 6 component refactor on `5ffde8c` plus the working tree, Python
+  3.11.16 with adjacent ctui at `ec16fb1`: all 111 tests passed. Coverage includes
+  real TCP/UDP/TLS/mTLS and PTY RTU/ASCII clients/listeners, cross-transport
+  proxying, polling, records, cancellation, project isolation, and import guards.
+  A final focused run passed all 21 server/proxy tests after adding real-endpoint
+  declined/confirmed stop checks; the other endpoint and forwarding are retained
+  on rejection. New regressions cover selected config save/load/set without I/O, explicit
+  start, atomic invalid edits, TLS clearing/verification, source/dirty state,
+  completion/unique prefixes, concurrent config/stop reservations, declined and
+  accepted stop confirmation, bare-component terminal/browser help presentation,
+  generated references, removed aliases, strict TOML markers/nested keys, and
+  retained reset evidence. Existing tests use the new command hierarchy.
+- Black/isort checks and pylint (10.00/10), lockfile and whitespace checks passed.
+  Wheel/sdist builds and both isolated artifact smoke tests passed with the
+  development ctui override. All 22 documented server assembly/export commands
+  and the example TOML import/validate/export round trip passed. Local document
+  links were checked. Restored adjacent ctui editable in the IDE .venv; direct
+  imports and dependency compatibility checks passed. Dependency metadata and
+  lockfile are unchanged. Physical hardware, sustained manual terminal/browser
+  checks, published-ctui release validation, and remote platform CI were not run.
+
 
 - October 6 proxy display follow-up: proxy request lines now use `unit=<value>`,
   matching server lines while retaining the actual mapped upstream unit. The

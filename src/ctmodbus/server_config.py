@@ -15,7 +15,9 @@ from pathlib import Path
 
 from ctui import CommandError
 
-from ctmodbus.tags import TABLES, Tag, encode_tag_value
+from ctmodbus.tags import TABLES, TAG_FIELDS, Tag, encode_tag_value
+
+CONFIG_NAME = "ctmodbus-server"
 
 IDENTITY = {
     "vendor": "ControlThings",
@@ -28,6 +30,7 @@ MODES = {"static", "random", "sequence"}
 def definition(full=True):
     """Return independent default or empty maps with no expanded addresses."""
     return {
+        "format": "ctmodbus-server",
         "version": 1,
         "unit": 1,
         "identity": dict(IDENTITY),
@@ -85,9 +88,11 @@ def validate_rule(rule, table, tag=None):
         "random": {"min", "max"},
         "sequence": {"values", "advance", "interval_seconds", "repeat"},
     }.get(mode, set())
-    unknown = set(rule) - allowed
-    if mode not in MODES or unknown:
-        raise CommandError(f"Invalid {mode!r} rule fields: {sorted(unknown)}")
+    if mode not in MODES:
+        raise CommandError(
+            f"Unknown rule mode {mode!r}; use static, random, or sequence"
+        )
+    reject_unknown(rule, allowed, f"{table} {mode} rule")
     if mode == "static":
         validate_value(
             rule.get("value", False if table in TABLES[:2] else 0), table, tag
@@ -125,30 +130,57 @@ def validate_rule(rule, table, tag=None):
             raise CommandError("Read sequences do not accept interval_seconds")
 
 
-def validate(config):  # pylint: disable=too-many-branches
-    """Return normalized settings; reject unknown fields, spans, and rule overlaps."""
+def reject_unknown(mapping, allowed, location):
+    """Report exact invalid keys and allowed replacements before normalization."""
+    if not isinstance(mapping, dict):
+        raise CommandError(f"{location} must be a TOML table")
+    unknown = set(mapping) - set(allowed)
+    if unknown:
+        obsolete = ""
+        if "tick_seconds" in unknown:
+            obsolete = "; tick_seconds is obsolete: use tick_interval_seconds"
+        raise CommandError(
+            f"Unknown keys in {location}: {', '.join(sorted(unknown))}{obsolete}. "
+            f"Allowed keys: {', '.join(sorted(allowed))}"
+        )
+
+
+def validate(config):  # pylint: disable=too-many-branches,too-many-statements
+    """Require format/version markers; normalize validated sparse rules.
+
+    Unknown or obsolete keys fail with their location and accepted keys. This
+    applies equally to imported files and project-saved definitions; no legacy
+    migration occurs. Validation never imports hooks or opens device I/O.
+    """
     try:
-        if not isinstance(config, dict) or set(config) - {
-            "version",
-            "unit",
-            "identity",
-            "tables",
-            "tags",
-            "hooks",
-            "seed",
-        }:
-            raise CommandError("Unknown server configuration fields")
+        reject_unknown(
+            config,
+            {
+                "format",
+                "version",
+                "unit",
+                "identity",
+                "tables",
+                "tags",
+                "hooks",
+                "seed",
+            },
+            "server definition",
+        )
+        if config.get("format") != "ctmodbus-server":
+            raise CommandError('Server definition requires format = "ctmodbus-server"')
+        if type(config.get("version")) is not int or config["version"] != 1:
+            raise CommandError("Server definition requires integer version = 1")
         if (
-            type(config.get("version", 1)) is not int
-            or config.get("version", 1) != 1
-            or type(config.get("unit", 1)) is not int
+            type(config.get("unit", 1)) is not int
             or not 1 <= config.get("unit", 1) <= 247
         ):
-            raise CommandError("Require version 1 and unit ID 1–247")
+            raise CommandError("Server unit ID must be an integer in 1–247")
         result = definition(False)
         result.update(copy.deepcopy(config))
         if "seed" in result and type(result["seed"]) is not int:
             raise CommandError("Random seed must be an integer")
+        reject_unknown(result["identity"], IDENTITY, "identity")
         identity = {**IDENTITY, **result["identity"]}
         if set(identity) - set(IDENTITY) or any(
             not isinstance(v, str) or len(v.encode()) > 200 for v in identity.values()
@@ -158,8 +190,13 @@ def validate(config):  # pylint: disable=too-many-branches
                 "up to 200 UTF-8 bytes"
             )
         result["identity"] = identity
-        if set(result["tables"]) - set(TABLES):
-            raise CommandError("Unknown Modbus table")
+        reject_unknown(result["tables"], TABLES, "tables")
+        if not isinstance(result["tags"], dict):
+            raise CommandError("tags must be a TOML table")
+        for table, settings in result["tables"].items():
+            reject_unknown(
+                settings, {"unmapped", "default", "ranges"}, f"tables.{table}"
+            )
         result["tables"] = {
             table: {
                 "unmapped": "illegal",
@@ -175,8 +212,12 @@ def validate(config):  # pylint: disable=too-many-branches
             ] not in ("illegal", "default"):
                 raise CommandError(f"Invalid settings for {table}")
             validate_value(settings["default"], table)
+            if not isinstance(settings["ranges"], list):
+                raise CommandError(f"tables.{table}.ranges must be an array of tables")
             spans = []
             for rule in settings["ranges"]:
+                if not isinstance(rule, dict):
+                    raise CommandError(f"tables.{table}.ranges entries must be tables")
                 start, end = rule["start"], rule.get("end", rule["start"])
                 if (
                     type(start) is not int
@@ -194,12 +235,23 @@ def validate(config):  # pylint: disable=too-many-branches
                 validate_rule(rule, table)
         spans = {table: [] for table in TABLES}
         for name, item in result["tags"].items():
+            reject_unknown(
+                item,
+                TAG_FIELDS
+                | {
+                    "mode",
+                    "value",
+                    "min",
+                    "max",
+                    "values",
+                    "advance",
+                    "interval_seconds",
+                    "repeat",
+                },
+                f"tags.{name}",
+            )
             tag = tag_from(name, item)
-            rule = {
-                k: v
-                for k, v in item.items()
-                if k not in {"table", "address", "type", "byte_order", "word_order"}
-            }
+            rule = {k: v for k, v in item.items() if k not in TAG_FIELDS}
             if any(
                 tag.address < stop and start < tag.stop
                 for start, stop in spans[tag.table]
@@ -208,12 +260,17 @@ def validate(config):  # pylint: disable=too-many-branches
             spans[tag.table].append((tag.address, tag.stop))
             validate_rule(rule, tag.table, tag)
         hooks = result["hooks"]
-        if set(hooks) - {"module", "on_read", "on_write", "on_tick", "tick_seconds"}:
-            raise CommandError("Unknown emulator hook")
+        reject_unknown(
+            hooks,
+            {"module", "on_read", "on_write", "on_tick", "tick_interval_seconds"},
+            "hooks",
+        )
+        if "tick_interval_seconds" in hooks and "on_tick" not in hooks:
+            raise CommandError("tick_interval_seconds requires on_tick")
         if any(
             not isinstance(v, str) or not v
             for k, v in hooks.items()
-            if k != "tick_seconds"
+            if k != "tick_interval_seconds"
         ):
             raise CommandError("Hook paths and function names must be nonempty strings")
         if any(
@@ -221,13 +278,13 @@ def validate(config):  # pylint: disable=too-many-branches
         ) and not hooks.get("module"):
             raise CommandError("Hooks require a Python module path")
         if "on_tick" in hooks:
-            interval = hooks.get("tick_seconds", 1)
+            interval = hooks.get("tick_interval_seconds", 1)
             if (
                 type(interval) not in (int, float)
                 or not math.isfinite(interval)
                 or interval <= 0
             ):
-                raise CommandError("tick_seconds must be positive and finite")
+                raise CommandError("tick_interval_seconds must be positive and finite")
         return result
     except (KeyError, TypeError, ValueError, AttributeError) as error:
         raise CommandError(f"Invalid server definition: {error}") from error
@@ -239,7 +296,7 @@ def load(path):
     try:
         config = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise CommandError(f"Cannot import server data: {error}") from error
+        raise CommandError(f"Cannot import server configuration: {error}") from error
     config = validate(config)
     if config["hooks"].get("module"):
         config["hooks"]["module"] = str(

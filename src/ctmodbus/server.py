@@ -216,7 +216,7 @@ def server_tls(cert_file, key_file, ca_file):
     certificates.
     """
     if not cert_file or not key_file:
-        raise CommandError("serve tls requires --cert-file and --key-file")
+        raise CommandError("server start tls requires --cert-file and --key-file")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert_file, key_file, password="")
     if ca_file:
@@ -273,7 +273,7 @@ class Server:
         """
         async with self.lifecycle:
             if self.listener is not None:
-                raise CommandError("Server already running; use serve stop first")
+                raise CommandError("Server already running; use server stop first")
             config = validate(config)
             if settings.transport in ("rtu", "ascii") and self.app.connection.settings:
                 connected = self.app.connection.settings
@@ -395,7 +395,7 @@ class Server:
         """
         previous = self.simulator.clock()
         while True:
-            await asyncio.sleep(self.config["hooks"].get("tick_seconds", 1))
+            await asyncio.sleep(self.config["hooks"].get("tick_interval_seconds", 1))
             now = self.simulator.clock()
             elapsed, previous = now - previous, now
             if self.proxy:

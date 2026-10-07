@@ -43,13 +43,19 @@ Run `ctmodbus` without arguments to open the terminal interface. Commands have
 automatic completion, generated help, and unique-prefix matching. Use `help`
 for the full list, including ctui's project, config, and history commands.
 
+Larger commands follow **component → action → transport or target**:
+`client start tcp HOST`, `server start tcp HOST`, and `proxy start`.
+Bare `client`, `server`, and `proxy` open example help in TUI/WUI popups
+and print examples in CLI. `help client`, `help server`, and `help proxy` remain generated references. Old connect/serve/profile/close/cancel
+spellings and proxy enable/disable are removed; ordinary unique prefixes remain.
+
 ```text
-connect                                           # suggest serial ports and local services
-connect tcp 10.10.10.1 --port 502 --unit 1
-connect udp 10.10.10.1 --port 10502
-connect tls plc.example.com --ca-file plant-ca.pem
-connect rtu /dev/ttyUSB0 --baudrate 9600 --parity E
-connect ascii COM2 --baudrate 9600
+client discover                                   # suggest serial ports and local services
+client start tcp 10.10.10.1 --port 502 --unit 1
+client start udp 10.10.10.1 --port 10502
+client start tls plc.example.com --ca-file plant-ca.pem
+client start rtu /dev/ttyUSB0 --baudrate 9600 --parity E
+client start ascii COM2 --baudrate 9600
 read id
 read discrete_inputs 1
 read coils 1,3,5,7
@@ -59,7 +65,7 @@ read holding_registers 0-500 --max-count 100
 write coils 128 0
 write coils 76 0,1,1,0,1,0,0,1
 write holding_registers 1000 14302,188,305
-close
+client stop
 ```
 
 These examples show alternative connections: close the current session before
@@ -219,7 +225,7 @@ All completed rows append, including unchanged values.
 Tag definitions cannot be edited during polling or target preparation. Stop the
 poll before changing projects; polls never follow a replacement connection.
 `poll stop` stops future ticks and waits for the active cycle without closing the
-connection. `cancel`, `close`, connection loss, or application shutdown stop
+connection. `client stop`, connection loss, or application shutdown stop
 polling; cancellation closes the transport and requires explicit reconnection.
 
 ## Connection options and operation results
@@ -231,7 +237,7 @@ connections or 1 second for serial connections. Serial defaults are 9600 baud,
 `--bytesize`, `--parity`, and `--stopbits`. TCP/UDP ports default to 502 and TLS to 802; supply
 host and port separately, including for IPv6 addresses.
 
-`connect tls HOST` uses Modbus TLS framing and verifies the server certificate
+`client start tls HOST` uses Modbus TLS framing and verifies the server certificate
 against system trust roots and the supplied hostname. Use `--ca-file PATH` for
 a private CA and `--cert-file PATH --key-file PATH` for client authentication.
 A certificate file may contain its private key; otherwise supply `--key-file`.
@@ -241,10 +247,9 @@ Profiles save these file paths and the verification setting, not certificate or
 private-key contents; the files must remain available when reconnecting.
 
 Device I/O is asynchronous, with requests serialized on the single connection.
-The status bar shows the project, transport state, and read progress. `cancel`
-or `close` cancels outstanding device work and closes the transport. Reconnect
+The status bar shows the project, transport state, and read progress. `client stop` cancels outstanding device work and closes the transport. Reconnect
 before issuing more requests. The tool does not automatically reconnect.
-Ctrl-C clears the input line; use `cancel` to stop running device commands.
+Ctrl-C clears the input line; use `client stop` to stop running device commands.
 
 Read output includes UTC timestamps and compressed address/value summaries.
 Register output includes integer, hex, and character views; the character view
@@ -257,8 +262,8 @@ The same commands work without opening the terminal UI:
 
 ```bash
 ctmodbus --help
-ctmodbus -c 'connect tcp 127.0.0.1 --port 5020' \
-  -c 'read holding_registers 0-9' -c 'close'
+ctmodbus -c 'client start tcp 127.0.0.1 --port 5020' \
+  -c 'read holding_registers 0-9' -c 'client stop'
 ctmodbus -f commands.txt
 ```
 
@@ -282,19 +287,47 @@ records. Live connections are never persisted.
 project
 configs list
 configs show tcp-local
-profile connect tcp-local
-profile save lab
+client config load tcp-local
+client config show
+client config set --unit 7 --timeout 0.5
+client config save lab
+client start
 read holding_registers 0-9
-close
+client stop
 project export lab.ctui-project
 history export commands.txt
 project create another-lab
 project load default
-profile connect lab
+client config load lab
 ```
 
-`tcp-local` and `udp-local` are built-in localhost profiles. `profile save NAME`
-saves the current settings; `profile connect NAME` validates and loads them.
+`tcp-local` and `udp-local` are built-in localhost profiles. `client config save NAME`
+saves selected settings, even while disconnected; `client config load NAME`
+validates and selects them without connecting. Use `client start` to connect.
+`client config show` displays all selected fields, the source name, and unsaved
+changes. `client config set` changes only supplied options, atomically, while
+the client is stopped. The first selection requires `--transport` and `--target`:
+
+```text
+client config set --transport tcp --target localhost --port 502 --unit 1
+client config set --timeout 0.2 --retries 0
+client config save lab
+client start
+client status
+client stop
+client config load lab
+client start
+```
+
+Settings include transport, target, port, unit, timeout, retries, serial
+baudrate/data bits/parity/stop bits, TLS certificate paths, and insecure mode.
+Clear TLS paths with `--clear-ca-file`, `--clear-cert-file`, and
+`--clear-key-file`; use `--insecure false` to restore verification or
+`--insecure true` to disable it. Edits retain omitted values, including when
+changing transport, so clear incompatible TLS fields in the same edit.
+File contents, live sockets, polling tasks, and runtime evidence are never
+saved in client configs. Selection survives client stop and clears on project
+transitions.
 ctui also supplies config JSON import/export and whole-project import/export.
 Close the connection and finish device work before switching or resetting
 projects; this keeps protocol records in the project that initiated them.
@@ -349,16 +382,16 @@ random and sequence behavior, plus optional Python hooks. Server definitions
 can be assembled in CTUI or imported/exported as TOML.
 
 ```text
-serve data import examples/device.toml
-serve tcp 127.0.0.1 --port 5020
-serve data show
-serve stop
-connect tcp 127.0.0.1 --port 502
-connect data show
+server config import examples/device.toml
+server start tcp 127.0.0.1 --port 5020
+server status
+server stop
+client start tcp 127.0.0.1 --port 502
+client status
 ```
 
-`proxy enable` routes incoming server requests through the connected client;
-`proxy disable` restores local behavior. See [server and proxy usage](docs/SERVER.md)
+`proxy start` routes incoming server requests through the connected client;
+`proxy stop` restores local behavior. See [server and proxy usage](docs/SERVER.md)
 for all commands, foreground CLI serving, hooks, defaults and evidence semantics.
 
 ### Server and proxy request output
@@ -372,17 +405,17 @@ operation records retain the full write payload. Arrival/forwarding lines do not
 imply a successful response or write acknowledgement.
 
 ```text
-serve tcp 127.0.0.1 --port 5020 --quiet
-proxy enable --quiet
-serve logging on
+server start tcp 127.0.0.1 --port 5020 --quiet
+proxy start --quiet
+server logging on
 proxy logging on
-serve logging off
+server logging off
 proxy logging off
-serve status
+server status
 proxy status
 ```
 
-`--quiet` is available on every `serve` transport and on `proxy enable`. Server
+`--quiet` is available on every `server start` transport and on `proxy start`. Server
 arrival and proxy forwarding logging are independent. Live `logging on/off`
 commands change routine verbosity without stopping the listener or disabling
 records. Starting a listener or enabling the proxy resets its logging policy

@@ -32,7 +32,7 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
             data_dir=self.directory.name, client_factory=lambda settings: self.client
         )
         await self.app.backend.open()
-        await self.app.dispatch("connect tcp localhost")
+        await self.app.dispatch("client start tcp localhost")
 
     async def asyncTearDown(self):
         """Drain polling and device work before closing isolated project storage."""
@@ -154,15 +154,15 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
         self.client.gate = None
         await self.app.dispatch("poll raw --coils 0 --interval 60")
         await asyncio.sleep(0.02)
-        await self.app.dispatch("cancel")
+        await self.app.dispatch("client stop")
         self.assertFalse(self.app.poller.active)
         self.assertFalse(self.client.connected)
-        await self.app.dispatch("connect tcp localhost")
+        await self.app.dispatch("client start tcp localhost")
         self.client.gate = asyncio.Event()
         self.client.started.clear()
         await self.app.dispatch("poll raw --coils 0")
         await asyncio.wait_for(self.client.started.wait(), 1)
-        await asyncio.wait_for(self.app.dispatch("close"), 1)
+        await asyncio.wait_for(self.app.dispatch("client stop"), 1)
         self.assertFalse(self.app.poller.active)
         self.assertIn("ERR", unpad(self.app.output_text))
 
@@ -245,7 +245,7 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
                     await self.app.dispatch(text)
             release.set()
             await starting
-        await self.app.dispatch("close")
+        await self.app.dispatch("client stop")
         self.assertFalse(self.client.connected)
         self.assertFalse(self.app.poller.active)
 
@@ -261,7 +261,7 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
             result = await app.run_cli(
                 [
                     "-c",
-                    "connect tcp localhost",
+                    "client start tcp localhost",
                     "-c",
                     "poll raw --coils 0 --count 2 --interval 0.01",
                     "-c",

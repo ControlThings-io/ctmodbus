@@ -3,6 +3,7 @@
 import asyncio
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from prompt_toolkit.application import create_app_session
 from prompt_toolkit.input import create_pipe_input
@@ -39,7 +40,7 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
                 try:
                     await asyncio.wait_for(ready.wait(), 3)
                     for text, name in (
-                        ("connect tcp localhost", "connect tcp"),
+                        ("client start tcp localhost", "client start tcp"),
                         ("read coils 0-2", "read coils"),
                         ("write coils 0 1", "write coils"),
                     ):
@@ -47,6 +48,23 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(
                             await asyncio.wait_for(finished.get(), 3), name
                         )
+                    dialogs = asyncio.Queue()
+
+                    async def show_overview(dialog):
+                        dialogs.put_nowait(dialog)
+                        return None
+
+                    previous_output = app.layout.output_field.text
+                    with patch("ctui.keybindings.show_dialog", show_overview):
+                        for component in ("client", "server", "proxy"):
+                            pipe.send_text(component + "\n")
+                            self.assertEqual(
+                                await asyncio.wait_for(finished.get(), 3), component
+                            )
+                            await asyncio.wait_for(dialogs.get(), 3)
+                            self.assertEqual(
+                                app.layout.output_field.text, previous_output
+                            )
                     pipe.send_text("poll raw --coils 0-2 --interval 0.01 --count 2\n")
                     self.assertEqual(
                         await asyncio.wait_for(finished.get(), 3), "poll raw"

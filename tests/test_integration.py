@@ -54,7 +54,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                 await app.backend.open()
                 try:
                     await app.dispatch(
-                        f"connect {transport} 127.0.0.1 --port {port} --timeout 0.5"
+                        f"client start {transport} 127.0.0.1 --port {port} --timeout 0.5"
                     )
                     await self.exercise(app)
                 finally:
@@ -104,7 +104,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                 await app.backend.open()
                 try:
                     await app.dispatch(
-                        f"connect {transport} {os.ttyname(slave2)} --timeout 1"
+                        f"client start {transport} {os.ttyname(slave2)} --timeout 1"
                     )
                     await self.exercise(app)
                 finally:

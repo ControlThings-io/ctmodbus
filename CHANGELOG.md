@@ -2,6 +2,15 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Refactor unreleased commands into client/server/proxy component groups, with
+  start/stop/status, separate configuration and runtime views, and example
+  help popups. Remove old command spellings; ctui-owned commands are unchanged.
+- Add selected client configuration show/set/save/load, explicit start after
+  load, atomic editing, and proxy-aware component stop confirmations.
+- Require strict TOML format/version markers and actionable unknown-key errors;
+  add the server format marker and rename hook tick_interval_seconds without
+  changing server version 1.
+
 - Display correlated server-arrival and proxy-forwarding request lines by default,
   with per-transport/proxy `--quiet`, independent live logging switches, visible
   failures, bounded write previews, and full write payloads in server records.
@@ -29,7 +38,7 @@
   floating-point decoding; configurable byte/word order; tagged reads/writes;
   and atomic TOML import/export with path completion through `tags export` and
   `tags import`.
-- Add `connect tls` with verified server certificates, custom CA roots, optional
+- Add `client start tls` with verified server certificates, custom CA roots, optional
   client identity, explicit insecure mode, and persisted TLS connection settings.
 
 - Migrate from ctui 0.x to ctui 1.0.0rc1 and require Python 3.11+.

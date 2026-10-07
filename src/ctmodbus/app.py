@@ -10,59 +10,30 @@ import shlex
 import sys
 from dataclasses import replace
 from importlib.metadata import version
-from typing import Literal
 
-from ctui import (
-    Argument,
-    CommandError,
-    CommandResult,
-    ConfirmationRequired,
-    CtuiApp,
-    command,
-)
+from ctui import CommandError, CommandResult, ConfirmationRequired, CtuiApp
 
+from ctmodbus.client_commands import ClientCommandMixin
+from ctmodbus.component_help import ComponentHelpMixin
 from ctmodbus.connection import Connection, ConnectionSettings, create_client
 from ctmodbus.data_state import DataState
-from ctmodbus.discovery import complete_serial, suggestions
 from ctmodbus.operations import ModbusCommandMixin
 from ctmodbus.polling import TABLE_ARGUMENTS, Poll, PollCommandMixin
+from ctmodbus.proxy_commands import ProxyCommandMixin
 from ctmodbus.server import Server
-from ctmodbus.server_commands import CONFIG_NAME, ServerCommandMixin
+from ctmodbus.server_commands import ServerCommandMixin
 from ctmodbus.tags import TagCommandMixin, TagStore, parse_tag_document
 
-NETWORK_ARGUMENTS = {
-    name: Argument(flags=(f"--{name}",))
-    for name in ("port", "unit", "timeout", "retries")
-}
-TLS_ARGUMENTS = {
-    **NETWORK_ARGUMENTS,
-    **{
-        name: Argument(flags=(f"--{name.replace('_', '-')}",))
-        for name in ("ca_file", "cert_file", "key_file", "insecure")
-    },
-}
-SERIAL_ARGUMENTS = {
-    name: Argument(flags=(f"--{name}",))
-    for name in (
-        "unit",
-        "timeout",
-        "retries",
-        "baudrate",
-        "bytesize",
-        "parity",
-        "stopbits",
-    )
-}
-SERIAL_ARGUMENTS["device"] = Argument(completer=complete_serial)
 
-
-async def complete_profiles(context):
-    """Complete saved profile names from the active project."""
-    return list(await context.app.configs.list())
-
-
-class ModbusApp(  # pylint: disable=too-many-public-methods
-    PollCommandMixin, ServerCommandMixin, TagCommandMixin, ModbusCommandMixin, CtuiApp
+class ModbusApp(  # pylint: disable=too-many-public-methods,too-many-ancestors
+    ComponentHelpMixin,
+    ClientCommandMixin,
+    ProxyCommandMixin,
+    PollCommandMixin,
+    ServerCommandMixin,
+    TagCommandMixin,
+    ModbusCommandMixin,
+    CtuiApp,
 ):
     """A Modbus client with one connection and project-scoped services.
 
@@ -88,6 +59,11 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
         TagStore uses the configured backend, which must support project SQL.
         """
         super().__init__(**kwargs)
+        self.selected_client_settings = None
+        self.client_config_source = None
+        self.client_config_saved = None
+        self._client_config_task = None
+        self._component_stop_task = None
         self.connection = Connection(client_factory)
         self.tags = TagStore(self.backend)
         self.server = Server(self)
@@ -229,33 +205,77 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
             "project reset",
         }
         device_command = item.name.startswith(
-            ("connect ", "read ", "write ", "profile ")
+            ("client start", "client config ", "read ", "write ")
         )
         poll_start = item.name in {"poll tags", "poll raw"}
         device_command = device_command or poll_start
-        server_import = item.name == "serve data import"
+        server_import = item.name == "server config import"
         server_start = item.name in {
-            "serve tcp",
-            "serve udp",
-            "serve tls",
-            "serve rtu",
-            "serve ascii",
+            "server start tcp",
+            "server start udp",
+            "server start tls",
+            "server start rtu",
+            "server start ascii",
         }
         server_edit = (
             (
-                item.name.startswith("serve data ")
+                item.name.startswith("server config ")
                 and item.name
                 not in {
-                    "serve data show",
-                    "serve data export",
-                    "serve data validate",
-                    "serve data reset",
+                    "server config show",
+                    "server config export",
+                    "server config validate",
+                    "server reset",
                 }
             )
-            or item.name.startswith("serve hook ")
+            or item.name.startswith("server hook ")
             or server_start
         )
         task = asyncio.current_task()
+        if item.name == "proxy start" and (
+            self._opening
+            or self._closing
+            or self.server.lifecycle.locked()
+            or self.server.stopping
+        ):
+            raise CommandError(
+                "Finish client/server lifecycle changes before starting the proxy"
+            )
+        client_config = item.name.startswith("client config ")
+        if self._client_config_task is not None and (
+            client_config
+            or item.name.startswith("client start")
+            or project_change
+            or item.name == "client stop"
+        ):
+            raise CommandError(
+                "Client configuration is changing; retry when it finishes"
+            )
+        if (
+            item.name == "server stop"
+            and self._server_edit_task is not None
+            and self.server.listener is None
+        ):
+            raise CommandError(
+                "Server configuration is changing; retry when it finishes"
+            )
+        component_stop = item.name in {"client stop", "server stop"}
+        if self._component_stop_task is not None and (
+            project_change
+            or item.name.startswith(
+                (
+                    "client start",
+                    "client config ",
+                    "server start",
+                    "server config ",
+                    "server hook ",
+                    "server reset",
+                    "proxy ",
+                )
+            )
+            or component_stop
+        ):
+            raise CommandError("A component is stopping; retry when it finishes")
         if self._stopping:
             raise CommandError("Application is stopping")
         importing = item.name == "tags import"
@@ -315,12 +335,12 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
                 "A project transition is in progress; retry when it finishes"
             )
         opening = item.name in {
-            "connect tcp",
-            "connect tls",
-            "connect udp",
-            "connect rtu",
-            "connect ascii",
-            "profile connect",
+            "client start tcp",
+            "client start tls",
+            "client start udp",
+            "client start rtu",
+            "client start ascii",
+            "client start",
         }
         if device_command:
             if self._opening:
@@ -351,7 +371,22 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
                 if len(matches) == 1 and matches[0] not in order:
                     order.append(matches[0])
             self._poll_orders[task] = order
+        if client_config:
+            self._client_config_task = task
+        if component_stop:
+            self._component_stop_task = task
         try:
+            if component_stop and self.server.proxy:
+                _, arguments = self.commands.resolve(text)
+                values = item.parse_args(arguments)
+                if not values.get("confirm", False):
+                    if not await self.confirm_replacement(
+                        "Proxy is running. Stop the proxy and this component? "
+                        "Use --confirm to approve without prompting.",
+                        kwargs,
+                    ):
+                        return CommandResult.rejected()
+                self.server.proxy = False
             if server_import:
                 rejected = await self.prepare_server_import(text, kwargs)
                 if rejected is not None:
@@ -369,6 +404,9 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
                 self.server.simulator = None
                 self.server.state = DataState("No server session")
                 self.client_state = DataState()
+                self.selected_client_settings = None
+                self.client_config_source = None
+                self.client_config_saved = None
             if item.name == "project reset" and "all" in tokens and result.accepted:
                 await self.tags.clear()
             warnings = self._record_warnings.get(task)
@@ -390,6 +428,10 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
                 ) from error
             raise
         finally:
+            if client_config:
+                self._client_config_task = None
+            if component_stop:
+                self._component_stop_task = None
             self._poll_orders.pop(task, None)
             if poll_start:
                 self._poll_start_task = None
@@ -495,7 +537,12 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
         self._stopping = True
         pending = self._tag_mutations | {
             task
-            for task in (self._tag_import_task, self._server_edit_task)
+            for task in (
+                self._tag_import_task,
+                self._server_edit_task,
+                self._client_config_task,
+                self._component_stop_task,
+            )
             if task is not None
         }
         pending.discard(asyncio.current_task())
@@ -505,194 +552,3 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
             await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), 5)
         await self.server.stop()
         await self.close_connection()
-
-    @command(name="connect")
-    async def connect_suggestions(self):
-        """List local serial devices and listening services."""
-        return await asyncio.to_thread(suggestions)
-
-    async def open_connection(self, settings):
-        """Return an appended OPENED result after connection and recording start.
-
-        Connection errors propagate as CommandError. If session setup fails or
-        is cancelled, abort the new connection and propagate the exception so
-        subsequent operations cannot run without their intended session.
-        """
-        if (
-            self.server.listener
-            and settings.transport in ("rtu", "ascii")
-            and self.server.serial_device == settings.target
-        ):
-            raise CommandError("Client and server cannot share the same serial port")
-        await self.connection.connect(settings)
-        self.client_state = DataState(settings.label)
-        try:
-            await self.finish_record_session()
-            self._record_session = await self.records.start_session(
-                "modbus", metadata=settings.as_dict()
-            )
-        except BaseException:
-            self.connection.abort()
-            raise
-        return CommandResult.append(f"Session OPENED: {settings.label}")
-
-    @command(name="connect tcp", arguments=NETWORK_ARGUMENTS)
-    async def connect_tcp(
-        self,
-        host: str,
-        port: int = 502,
-        unit: int = 1,
-        timeout: float = 3,
-        retries: int = 0,
-    ):
-        """Open a Modbus TCP session."""
-        return await self.open_connection(
-            ConnectionSettings(
-                "tcp", host, port=port, unit=unit, timeout=timeout, retries=retries
-            )
-        )
-
-    @command(name="connect tls", arguments=TLS_ARGUMENTS)
-    async def connect_tls(
-        self,
-        host: str,
-        port: int = 802,
-        unit: int = 1,
-        timeout: float = 3,
-        retries: int = 0,
-        ca_file: str | None = None,
-        cert_file: str | None = None,
-        key_file: str | None = None,
-        insecure: bool = False,
-    ):
-        """Open Modbus TLS; verify the server unless --insecure is specified."""
-        return await self.open_connection(
-            ConnectionSettings(
-                "tls",
-                host,
-                port=port,
-                unit=unit,
-                timeout=timeout,
-                retries=retries,
-                ca_file=ca_file,
-                cert_file=cert_file,
-                key_file=key_file,
-                insecure=insecure,
-            )
-        )
-
-    @command(name="connect udp", arguments=NETWORK_ARGUMENTS)
-    async def connect_udp(
-        self,
-        host: str,
-        port: int = 502,
-        unit: int = 1,
-        timeout: float = 3,
-        retries: int = 0,
-    ):
-        """Open a Modbus UDP session (does not verify a remote device)."""
-        return await self.open_connection(
-            ConnectionSettings(
-                "udp", host, port=port, unit=unit, timeout=timeout, retries=retries
-            )
-        )
-
-    @command(name="connect rtu", arguments=SERIAL_ARGUMENTS)
-    async def connect_rtu(
-        self,
-        device: str,
-        unit: int = 1,
-        timeout: float = 1,
-        retries: int = 0,
-        baudrate: int = 9600,
-        bytesize: int = 8,
-        parity: Literal["N", "E", "O"] = "N",
-        stopbits: int = 1,
-    ):
-        """Open a Modbus RTU serial session."""
-        return await self.open_connection(
-            ConnectionSettings(
-                "rtu",
-                device,
-                unit=unit,
-                timeout=timeout,
-                retries=retries,
-                baudrate=baudrate,
-                bytesize=bytesize,
-                parity=parity,
-                stopbits=stopbits,
-            )
-        )
-
-    @command(name="connect ascii", arguments=SERIAL_ARGUMENTS)
-    async def connect_ascii(
-        self,
-        device: str,
-        unit: int = 1,
-        timeout: float = 1,
-        retries: int = 0,
-        baudrate: int = 9600,
-        bytesize: int = 8,
-        parity: Literal["N", "E", "O"] = "N",
-        stopbits: int = 1,
-    ):
-        """Open a Modbus ASCII serial session."""
-        return await self.open_connection(
-            ConnectionSettings(
-                "ascii",
-                device,
-                unit=unit,
-                timeout=timeout,
-                retries=retries,
-                baudrate=baudrate,
-                bytesize=bytesize,
-                parity=parity,
-                stopbits=stopbits,
-            )
-        )
-
-    @command
-    async def close(self):
-        """Close the session and cancel outstanding device operations."""
-        await self.close_connection()
-        return CommandResult.append("Session CLOSED")
-
-    @command
-    async def cancel(self):
-        """Cancel device work and close the connection to discard pending replies."""
-        await self.close_connection()
-        return CommandResult.append("Device work cancelled; session CLOSED")
-
-    @command(name="profile save")
-    async def profile_save(self, name: str):
-        """Save current settings under NAME and return an appended confirmation.
-
-        Existing configs are replaced. Missing settings raise CommandError;
-        storage errors propagate. Profiles contain certificate paths, not keys
-        or certificate contents, and depend on those paths on the next machine.
-        """
-        if name == CONFIG_NAME:
-            raise CommandError("That name is reserved for server configuration")
-        if self.connection.settings is None:
-            raise CommandError("Connect before saving a profile")
-        await self.configs.save(name, self.connection.settings.as_dict())
-        return CommandResult.append(f"Saved connection profile {name!r}")
-
-    @command(
-        name="profile connect",
-        arguments={"name": Argument(completer=complete_profiles)},
-    )
-    async def profile_connect(self, name: str):
-        """Load NAME, validate ConnectionSettings, and return open_connection result.
-
-        Missing or invalid profiles raise CommandError before device I/O;
-        otherwise open_connection owns setup and failure cleanup.
-        """
-        values = await self.configs.get(name)
-        try:
-            settings = ConnectionSettings(**values)
-        except (TypeError, ValueError) as error:
-            raise CommandError(
-                f"Invalid connection profile {name!r}: {error}"
-            ) from error
-        return await self.open_connection(settings)

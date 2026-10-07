@@ -1,7 +1,7 @@
 # Serving and proxying Modbus
 
-`serve` creates one application-owned listener, independent of the single client
-opened by `connect`. Configure the server before starting it. The TUI remains
+`server start` creates one application-owned listener, independent of the single client
+opened by `client start`. Configure the server before starting it. The TUI remains
 interactive; stopping the server keeps the client connection open. Exiting shuts
 both down. Project changes and tag/definition edits require a stopped server.
 Definitions are saved per project through ctui configs; live observations, tasks,
@@ -11,26 +11,26 @@ the definition and tags, but not external Python or certificate files.
 ## Start and stop
 
 ```text
-serve data import examples/device.toml
-serve data validate
-serve tcp 127.0.0.1 --port 5020
-serve status
-serve data show
-serve stop
+server config import examples/device.toml
+server config validate
+server start tcp 127.0.0.1 --port 5020
+server config show
+server status
+server stop
 ```
 
 Other listeners share the same local definition:
 
 ```text
-serve udp 127.0.0.1 --port 5020
-serve tls 127.0.0.1 --port 8020 --cert-file server.pem --key-file server.key
-serve rtu /dev/ttyUSB0 --baudrate 9600
-serve ascii /dev/ttyUSB0 --baudrate 9600
+server start udp 127.0.0.1 --port 5020
+server start tls 127.0.0.1 --port 8020 --cert-file server.pem --key-file server.key
+server start rtu /dev/ttyUSB0 --baudrate 9600
+server start ascii /dev/ttyUSB0 --baudrate 9600
 ```
 
 TCP/UDP default to loopback port 5020; TLS defaults to loopback port 8020.
 Explicit ports 502/802 work when the operating system permits binding them.
-Serial defaults match `connect`: 9600 baud, 8 data bits, no parity, one stop bit.
+Serial defaults match `client start`: 9600 baud, 8 data bits, no parity, one stop bit.
 Serial serving responds as a device, not a passive tap. The client and listener
 must use different serial ports. Unit IDs 1–247 are supported, defaulting to 1;
 serial traffic for other units (including broadcasts) is ignored.
@@ -42,8 +42,8 @@ The shared dispatch path also supports CLI command sequences. Use explicit
 
 ```bash
 uv run --with-editable ../ctui ctmodbus \
-  -c "serve data import examples/device.toml" \
-  -c "serve tcp 127.0.0.1 --port 5020 --foreground"
+  -c "server config import examples/device.toml" \
+  -c "server start tcp 127.0.0.1 --port 5020 --foreground"
 ```
 
 Without foreground mode, a CLI invocation exits after its commands and closes
@@ -58,6 +58,14 @@ initialized to false or zero. Defaults are sparse: no giant initial value array.
 This is permitted by Modbus Application Protocol V1.1b3 sections 4.3/4.4. A
 request still obeys per-function quantity limits, and cannot cross address 65535.
 
+Server TOML requires `format = "ctmodbus-server"` and integer `version = 1`.
+Tag-only TOML requires `format = "ctmodbus-tags"` and integer `version = 1`.
+Missing markers, unsupported versions, unknown top-level/nested fields, and
+obsolete `tick_seconds` are rejected with actionable errors. Use
+`tick_interval_seconds` for periodic hooks. These unreleased formats have no
+legacy migration; update old files explicitly. ctui-owned config fields are
+unchanged.
+
 Importing TOML replaces the server definition. Omitted tables are unavailable.
 Within a table, `unmapped = "illegal"` makes unlisted addresses return exception
 02 (Illegal Data Address); `unmapped = "default"` implements unlisted addresses
@@ -65,6 +73,7 @@ with the configured initial `default`. Writes to writable default-backed
 addresses are retained for that server run.
 
 ```toml
+format = "ctmodbus-server"
 version = 1
 unit = 1
 seed = 123
@@ -134,52 +143,53 @@ writes; replace the rule with static behavior to stop them.
 ## Assemble a definition in CTUI
 
 ```text
-serve data clear --confirm
-serve data unit 1
-serve data seed 123
-serve data identity --vendor ControlThings --product "Tank and pump simulator" --revision 1.0
-serve data table coils --unmapped illegal
-serve data table discrete_inputs --unmapped illegal
-serve data table input_registers --unmapped illegal
-serve data table holding_registers --unmapped illegal
+server config clear --confirm
+server config unit 1
+server config seed 123
+server config identity --vendor ControlThings --product "Tank and pump simulator" --revision 1.0
+server config table coils --unmapped illegal
+server config table discrete_inputs --unmapped illegal
+server config table input_registers --unmapped illegal
+server config table holding_registers --unmapped illegal
 
 tags create pump_enabled coil 0 bool
 tags create pump_running discrete_input 0 bool
 tags create tank_level input_register 10 float32
-serve data set tag pump_enabled false
-serve data set tag pump_running false
-serve data set tag tank_level 100.0
+server config set tag pump_enabled false
+server config set tag pump_running false
+server config set tag tank_level 100.0
 
-serve data set holding_registers 100-199 42
-serve data random holding_registers 7 --min 0 --max 100
-serve data sequence tag tank_level 100,75,50,25 --advance time --interval 1.0
-serve data sequence holding_registers 8 10,20,30 --advance read --repeat=false
+server config set holding_registers 100-199 42
+server config random holding_registers 7 --min 0 --max 100
+server config sequence tag tank_level 100,75,50,25 --advance time --interval 1.0
+server config sequence holding_registers 8 10,20,30 --advance read --repeat=false
 
-serve hook write examples/device_logic.py on_write
-serve hook tick examples/device_logic.py on_tick --interval 1.0
-serve data validate
-serve data export device.toml
+server hook write examples/device_logic.py on_write
+server hook tick examples/device_logic.py on_tick --interval 1.0
+server config validate
+server config export device.toml
 ```
 
 `set`, `random`, and `sequence` replace a matching tag/exact raw-range rule.
-`serve data remove tag NAME` removes a server tag rule without deleting the
-project tag. `serve data remove TABLE RANGE` removes exact configured raw ranges;
-the table fallback still applies. `serve hook clear` removes all hooks.
+`server config remove tag NAME` removes a server tag rule without deleting the
+project tag. `server config remove TABLE RANGE` removes exact configured raw ranges;
+the table fallback still applies. `server hook clear` removes all hooks.
 Changing a referenced project tag while stopped requires updating/removing its
 server rule before validation/start; running definitions cannot be edited.
 
-`serve data import FILE --replace` explicitly approves conflicting project tag
+`server config import FILE --replace` explicitly approves conflicting project tag
 definitions. Otherwise differing definitions require a collision-specific TUI
 confirmation. Import retains the exact validated file contents throughout
 confirmation, and atomically replaces the configuration and merges its tags.
 Unrelated project tags remain. Export includes initial definitions and referenced
 tags, not last observed or client-written runtime values.
 
-`serve data validate` checks definitions, shared project tags and referenced
+`server config validate` checks definitions, shared project tags and referenced
 hook callables without opening a listener. It does not prove hook behavior or
-port availability. `serve data reset --confirm` restores running local values,
+port availability. `server reset --confirm` restores running local values,
 random state and sequence clocks from the initial definition. Reset is disabled
-in proxy mode. Raw data and configured initial values remain distinct.
+in proxy mode. Reset preserves saved settings and timestamped observations,
+including earlier proxy evidence. Raw evidence and initial values remain distinct.
 
 ## Optional Python hooks
 
@@ -192,7 +202,7 @@ module = "device_logic.py"
 on_read = "on_read"
 on_write = "on_write"
 on_tick = "on_tick"
-tick_seconds = 1.0
+tick_interval_seconds = 1.0
 ```
 
 All hooks are optional and share one Python file. The module path resolves
@@ -229,7 +239,7 @@ complete-value hook.
 
 Request hooks run with pending changes under the local operation lock. A hook
 failure rolls back its value, sequence and random-state changes, returns
-exception 04 (Server Device Failure), and appears in `serve status` and operation
+exception 04 (Server Device Failure), and appears in `server status` and operation
 records. Failed ticks leave values unchanged and later ticks continue. Local
 hooks and rules are bypassed in proxy mode. Derived-expression syntax and MITM
 rule files are not implemented.
@@ -237,15 +247,22 @@ rule files are not implemented.
 ## Proxying and evidence views
 
 ```text
-connect rtu /dev/ttyUSB0 --baudrate 9600 --retries 0
-serve tcp 127.0.0.1 --port 5020
-proxy enable
+client start rtu /dev/ttyUSB0 --baudrate 9600 --retries 0
+server start tcp 127.0.0.1 --port 5020
+proxy start
 proxy status
-connect data show
-serve data show
-proxy disable
-serve stop
+client status
+server status
+proxy stop
+server stop
 ```
+
+Proxying requires both endpoints. `client stop` and `server stop` warn and
+ask for confirmation while the proxy is running; declining preserves both
+components. Approval stops proxy routing as part of stopping that component.
+CLI can approve explicitly with `--confirm`. The other component stays running.
+Unexpected upstream loss still produces a gateway error while proxy mode remains
+active; it never silently falls back to local simulation.
 
 Proxying requires both endpoints. The server's configured unit routes to the
 client connection's configured unit. One upstream connection is shared by proxy
@@ -257,18 +274,18 @@ are supported. Other functions return exception 01 (Illegal Function).
 
 Upstream exceptions pass through. Unavailable/timed-out upstream exchanges
 return gateway exception 0B; there is no simulated fallback or automatic retry
-of uncertain writes. Proxy enable requires `--retries 0`. Closing the client
-cancels/drains active exchanges; proxy mode remains enabled and fails clearly
-until reconnection or `proxy disable`. Obvious loops back to the listener are
-rejected. Proxy disable routes new requests locally; already-routed exchanges
+of uncertain writes. Proxy start requires `--retries 0`. Confirmed `client stop`
+cancels/drains active exchanges and stops proxy routing. Unexpected connection
+loss retains proxy mode until `proxy stop` or a confirmed component stop. Obvious loops back to the listener are
+rejected. Proxy stop routes new requests locally; already-routed exchanges
 finish using their original mode. Saved emulator configuration is preserved.
 
-`connect data show` works without a server, accumulating successful console
+`client status` works without a server, accumulating successful console
 reads and attempted/acknowledged/uncertain writes. It includes the last observed
-device identification. `serve data show` shows configured initial rules, current
-local static tags and last downstream observations. Proxy upstream values are
+device identification. `server config show` shows saved initial rules;
+`server status` shows current local static tags and last downstream observations. Proxy upstream values are
 recorded before the response extension point; downstream values afterwards.
-The two views are independent. Neither show command issues network requests.
+The two views are independent. Neither status command issues network requests.
 
 Unknown addresses remain unknown. Read/write times are UTC. Acknowledgement
 is separate from readback; the view labels whether a later read matches or
@@ -281,9 +298,9 @@ only request/response extension seams exist today.
 ## Request display controls
 
 Listeners default to appending request-arrival lines; proxy mode additionally
-appends forwarding lines with the same request ID. `--quiet` on any `serve`
-transport suppresses routine server lines. `proxy enable --quiet` independently
-suppresses routine forwarding lines. `serve logging on/off` and
+appends forwarding lines with the same request ID. `--quiet` on any `server start`
+transport suppresses routine server lines. `proxy start --quiet` independently
+suppresses routine forwarding lines. `server logging on/off` and
 `proxy logging on/off` update these policies live, and status commands show them.
 Errors bypass both quiet settings; operation recording is independent of display.
 Request IDs increase across listener restarts within an application, and verbosity

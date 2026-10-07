@@ -230,7 +230,7 @@ class Connection:
         """
         client, generation = self.client, self.generation
         if client is None:
-            raise CommandError("No open session; connect first")
+            raise CommandError("No open session; use client start first")
         task = asyncio.current_task()
         self.tasks.add(task)
         try:

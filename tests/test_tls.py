@@ -26,25 +26,28 @@ class TlsOptionsTests(unittest.IsolatedAsyncioTestCase):
     asyncTearDown = test_commands.CommandTests.asyncTearDown
 
     async def test_defaults_and_profile_roundtrip(self):
-        """Preserve TLS verification and certificate paths across profile save/connect."""
-        await self.app.dispatch("connect tls example.com")
+        """Preserve TLS options across config save/load and explicit start."""
+        await self.app.dispatch("client start tls example.com")
         self.assertEqual(self.app.connection.settings.port, 802)
         self.assertFalse(self.app.connection.settings.insecure)
-        await self.app.dispatch("close")
+        await self.app.dispatch("client stop")
         await self.app.dispatch(
-            'connect tls example.com --port 1802 --ca-file "root ca.pem" --cert-file client.pem --key-file client.key --insecure'
+            'client start tls example.com --port 1802 --ca-file "root ca.pem" --cert-file client.pem --key-file client.key --insecure'
         )
-        await self.app.dispatch("profile save secure")
+        await self.app.dispatch("client config save secure")
         settings = self.app.connection.settings
-        await self.app.dispatch("close")
-        await self.app.dispatch("profile connect secure")
+        await self.app.dispatch("client stop")
+        await self.app.dispatch("client config load secure")
+        await self.app.dispatch("client start")
         self.assertEqual(settings, self.app.connection.settings)
         self.assertIn("TLS example.com:1802", self.app.connection_status())
 
     async def test_invalid_key_option(self):
         """Reject a client key supplied without a certificate."""
         with self.assertRaisesRegex(CommandError, "requires cert-file"):
-            await self.app.dispatch("connect tls example.com --key-file client.key")
+            await self.app.dispatch(
+                "client start tls example.com --key-file client.key"
+            )
 
     async def test_tls_opening_guard(self):
         """Prevent device I/O until the TLS recording session has started."""
@@ -58,7 +61,9 @@ class TlsOptionsTests(unittest.IsolatedAsyncioTestCase):
             return await original(*args, **kwargs)
 
         with patch.object(self.app.records, "start_session", delayed):
-            task = asyncio.create_task(self.app.dispatch("connect tls example.com"))
+            task = asyncio.create_task(
+                self.app.dispatch("client start tls example.com")
+            )
             await entered.wait()
             with self.assertRaisesRegex(CommandError, "opening"):
                 await self.app.dispatch("read coils 0")
@@ -131,7 +136,7 @@ class TlsIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_verified_tls_operations(self):
         """Verify the shared protocol workflow over a trusted TLS connection."""
         await self.app.dispatch(
-            f'connect tls localhost --port {self.port} --ca-file "{self.cert}"'
+            f'client start tls localhost --port {self.port} --ca-file "{self.cert}"'
         )
         await test_integration.TransportTests.exercise(self, self.app)
 
@@ -139,7 +144,7 @@ class TlsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         """Reject an untrusted server and clear the failed connection."""
         with self.assertRaises(CommandError):
             await self.app.dispatch(
-                f"connect tls localhost --port {self.port} --timeout 0.5"
+                f"client start tls localhost --port {self.port} --timeout 0.5"
             )
         self.assertIsNone(self.app.connection.client)
 
@@ -147,13 +152,15 @@ class TlsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         """Reject a trusted certificate whose hostname does not match the target."""
         with self.assertRaises(CommandError):
             await self.app.dispatch(
-                f'connect tls 127.0.0.1 --port {self.port} --ca-file "{self.cert}" --timeout 0.5'
+                f'client start tls 127.0.0.1 --port {self.port} --ca-file "{self.cert}" --timeout 0.5'
             )
         self.assertIsNone(self.app.connection.client)
 
     async def test_explicit_insecure_connection(self):
         """Allow protocol I/O only after explicitly disabling certificate verification."""
-        await self.app.dispatch(f"connect tls 127.0.0.1 --port {self.port} --insecure")
+        await self.app.dispatch(
+            f"client start tls 127.0.0.1 --port {self.port} --insecure"
+        )
         result = await self.app.dispatch("read coils 0")
         self.assertIn("Read coils", result.output)
 
@@ -161,7 +168,7 @@ class TlsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         """Reject a missing trust file and leave no open client."""
         with self.assertRaises(CommandError):
             await self.app.dispatch(
-                f'connect tls localhost --port {self.port} --ca-file "{self.cert}.missing"'
+                f'client start tls localhost --port {self.port} --ca-file "{self.cert}.missing"'
             )
         self.assertIsNone(self.app.connection.client)
 
@@ -180,7 +187,7 @@ class TlsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.server.serve_forever(background=True)
         port = self.server.transport.sockets[0].getsockname()[1]
         await self.app.dispatch(
-            f'connect tls localhost --port {port} --ca-file "{self.cert}" --cert-file "{self.cert}" --key-file "{self.key}"'
+            f'client start tls localhost --port {port} --ca-file "{self.cert}" --cert-file "{self.cert}" --key-file "{self.key}"'
         )
         result = await self.app.dispatch("read coils 0")
         self.assertIn("Read coils", result.output)

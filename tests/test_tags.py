@@ -104,7 +104,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def connect(self):
         """Open the test TCP session using the injected fake client."""
-        await self.app.dispatch("connect tcp localhost")
+        await self.app.dispatch("client start tcp localhost")
 
     async def test_create_list_rename_delete_and_project_scope(self):
         """Verify tag CRUD, project switching, and full-reset removal."""

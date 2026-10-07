@@ -121,16 +121,16 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def connect(self):
         """Open the test TCP session using the injected fake client."""
-        await self.app.dispatch("connect tcp localhost --unit 7")
+        await self.app.dispatch("client start tcp localhost --unit 7")
 
     async def test_all_transport_commands(self):
         """Verify each transport command stores settings and closes cleanly."""
         for transport in ("tcp", "udp", "rtu", "ascii"):
             await self.app.dispatch(
-                f"connect {transport} target --unit 7 --timeout 0.2"
+                f"client start {transport} target --unit 7 --timeout 0.2"
             )
             self.assertEqual(self.app.connection.settings.transport, transport)
-            await self.app.dispatch("close")
+            await self.app.dispatch("client stop")
 
     async def test_range_chunking_and_unit(self):
         """Assert chunk boundaries, input order, and configured unit on every request."""
@@ -280,7 +280,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         await self.client.started.wait()
         second = asyncio.create_task(self.app.dispatch("read coils 1"))
         await asyncio.sleep(0)
-        await asyncio.wait_for(self.app.dispatch("cancel"), 1)
+        await asyncio.wait_for(self.app.dispatch("client stop"), 1)
         outcomes = await asyncio.gather(first, second, return_exceptions=True)
         self.assertTrue(all(isinstance(item, CommandError) for item in outcomes))
         self.assertEqual(len(self.client.calls), 1)
@@ -293,7 +293,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         self.client.gate = asyncio.Event()
         task = asyncio.create_task(self.app.dispatch("write coils 0 1"))
         await self.client.started.wait()
-        await self.app.dispatch("close")
+        await self.app.dispatch("client stop")
         with self.assertRaisesRegex(CommandError, "outcome unknown"):
             await task
 
@@ -307,9 +307,9 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.Event().wait()
 
         self.client.connect = blocked
-        task = asyncio.create_task(self.app.dispatch("connect tcp localhost"))
+        task = asyncio.create_task(self.app.dispatch("client start tcp localhost"))
         await started.wait()
-        await asyncio.wait_for(self.app.dispatch("cancel"), 1)
+        await asyncio.wait_for(self.app.dispatch("client stop"), 1)
         with self.assertRaises(CommandError):
             await task
         self.assertIsNone(self.app.connection.client)
@@ -336,7 +336,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_double_connect_rejected(self):
         """Require explicit close before opening another session."""
         await self.connect()
-        with self.assertRaisesRegex(CommandError, "already open"):
+        with self.assertRaisesRegex(CommandError, "Stop the client"):
             await self.connect()
 
     async def test_disconnected_session(self):
@@ -349,7 +349,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_profiles_records_history_and_project_isolation(self):
         """Keep profiles, records, and history local and guard active project changes."""
         await self.connect()
-        await self.app.dispatch("profile save lab")
+        await self.app.dispatch("client config save lab")
         await self.app.dispatch("read coils 0")
         self.assertEqual((await self.app.configs.get("lab"))["unit"], 7)
         self.assertEqual(len(await self.app.records.query()), 2)
@@ -360,12 +360,13 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         ):
             with self.assertRaises(CommandError):
                 await self.app.dispatch(text)
-        await self.app.dispatch("close")
+        await self.app.dispatch("client stop")
         await self.app.dispatch("project create new")
         self.assertNotIn("lab", await self.app.configs.list())
         self.assertEqual(await self.app.records.query(), [])
         await self.app.dispatch("project load default")
-        await self.app.dispatch("profile connect lab")
+        await self.app.dispatch("client config load lab")
+        await self.app.dispatch("client start")
         self.assertEqual(self.app.connection.settings.unit, 7)
         history = await self.app.history.all()
         self.assertIn("read coils 0", [entry.command for entry in history])
@@ -382,7 +383,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             return await original(*args, **kwargs)
 
         with patch.object(self.app.records, "start_session", slow_start):
-            task = asyncio.create_task(self.app.dispatch("connect tcp localhost"))
+            task = asyncio.create_task(self.app.dispatch("client start tcp localhost"))
             await entered.wait()
             with self.assertRaisesRegex(CommandError, "opening"):
                 await self.app.dispatch("read coils 0")
@@ -410,7 +411,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as path:
             script = Path(path) / "commands.txt"
             script.write_text(
-                "# local fixture\n\nconnect tcp localhost\nread coils 0\n",
+                "# local fixture\n\nclient start tcp localhost\nread coils 0\n",
                 encoding="utf-8",
             )
             app = ModbusApp(
@@ -424,7 +425,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(status, 0, err.getvalue())
             self.assertIn("Write acknowledged", out.getvalue())
             status = await app.run_cli(
-                ["-c", "connect tcp localhost", "-c", "write coils 0 nope"],
+                ["-c", "client start tcp localhost", "-c", "write coils 0 nope"],
                 stdout=out,
                 stderr=err,
             )
@@ -450,7 +451,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             "bad", {"transport": "tcp", "target": "localhost", "timeout": "oops"}
         )
         with self.assertRaises(CommandError):
-            await self.app.dispatch("profile connect bad")
+            await self.app.dispatch("client config load bad")
 
     async def test_record_failure_keeps_acknowledged_write(self):
         """Retain acknowledged-write success when recording fails, with a warning."""
@@ -472,7 +473,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             status = await app.run_cli(
                 [
                     "-c",
-                    "connect tcp localhost",
+                    "client start tcp localhost",
                     "-c",
                     "read coils 0",
                     "-c",

@@ -331,3 +331,56 @@ state, reset by each enabling command. Use a shared synchronous output append
 helper for polling and logs so no await interleaves updates to existing output.
 Do not reinstate the reverted append default for all command results. MITM output
 remains future work, without rules or extra feature scope in this implementation.
+
+## D16 — Component commands, selected client settings, and strict TOML
+
+Accepted and implemented, 2026-10-06, by explicit owner direction. This
+supersedes the command spellings in D11, D13–D15; their I/O and evidence policies
+otherwise remain in force.
+
+Larger commands follow **component → action → transport or target**.
+Use client start tcp/udp/tls/rtu/ascii, client discover, client stop,
+and client status; use parallel server start/stop/status and proxy
+start/stop/status. Client stop replaces both close and cancel. Status combines
+lifecycle information and retained runtime evidence. Saved server definitions
+belong under server config, companion hooks under server hook, and runtime
+reset is server reset --confirm. Logging switches remain component-specific.
+Ordinary read/write/poll syntax stays short.
+
+Client settings are selected independently from live I/O. Client config
+provides show/set/save/load; loading requires a stopped client and explicit
+client start. Editing only supplied fields validates the full result before
+replacement. Initial selection requires transport/target; TLS starts with port
+802, serial with a one-second timeout. Show identifies saved source and unsaved
+changes. Explicit start settings replace selection; stop retains it and project
+transitions clear it. Certificate contents and live clients/tasks are never
+stored. TLS paths have explicit clear flags and insecure mode accepts true/false.
+ctui-owned config fields and built-in commands are unchanged.
+
+Proxy start requires both endpoints and zero upstream retries. Component stops
+require confirmation while proxy routing is active; rejection preserves both
+components, approval stops proxy routing with the chosen endpoint. CLI supplies
+--confirm; TUI/WUI use the requesting interface's confirmation dialog. Dispatch
+reserves stop approval across awaits to prevent competing lifecycle transitions.
+Unexpected upstream loss still fails without local fallback. Server runtime
+reset preserves saved configuration and timestamped historical observations.
+
+Bare client/server/proxy open concise example overviews in help popups; CLI
+prints the same text. Generated help COMPONENT remains available. ctui's
+internal help-result presentation protocol is isolated in component_help.py;
+release validation must exercise it against the intended published ctui build.
+
+No legacy aliases or TOML migrations are retained because these features are
+unreleased. Framework unique command prefixes remain available (serve can
+resolve as a prefix of server, rather than an explicitly registered alias).
+Server files require format ctmodbus-server and integer version 1; tag files
+require ctmodbus-tags and integer version 1. Unknown nested/top-level fields
+fail with actionable errors. Hook tick_seconds becomes tick_interval_seconds;
+server version stays 1 because the feature is unpublished. Existing server
+definitions need explicit format/key updates, or clear/reimport.
+
+Client and proxy command mixins now live in client_commands.py and
+proxy_commands.py; server commands remain in server_commands.py. App.py
+owns shared dispatch arbitration, projects, records, progress and shutdown.
+Transport validation/factories and request routing remain in their existing
+modules, preserving serialization and protocol evidence contracts.
