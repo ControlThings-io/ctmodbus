@@ -48,7 +48,7 @@ SERIAL_ARGS = {
 
 
 class ServerCommandMixin:  # pylint: disable=too-many-public-methods
-    """Commands share normal CTUI parsing, dispatch, history and project guards."""
+    """Commands share CTUI dispatch and guards; successful output always appends."""
 
     async def server_definition(self):
         """Load current project definition, defaulting to all-zero full address maps."""
@@ -124,13 +124,15 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                     (CONFIG_NAME, json.dumps(config)),
                 )
         await self.backend.touch()
-        return f"Imported server definition with {len(tags)} tags."
+        return CommandResult.append(
+            f"Imported server definition with {len(tags)} tags."
+        )
 
     @command(name="serve data export", arguments=PATH_ARG)
     async def serve_data_export(self, path: Path):
         """Export definition and referenced tags, not live values or Python source."""
         destination = server_config.export(await self.server_definition(), path)
-        return f"Exported server definition to {destination}."
+        return CommandResult.append(f"Exported server definition to {destination}.")
 
     @command(
         name="serve data clear", arguments={"confirm": Argument(flags=("--confirm",))}
@@ -140,7 +142,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         if not confirm:
             raise CommandError("Use --confirm to clear the server definition")
         await self.save_server_definition(server_config.definition(False))
-        return (
+        return CommandResult.append(
             "Server definition cleared; no addresses available. Project tags retained."
         )
 
@@ -153,7 +155,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         config = await self.server_definition()
         config["unit"] = unit
         await self.save_server_definition(config)
-        return f"Server unit set to {unit}."
+        return CommandResult.append(f"Server unit set to {unit}.")
 
     @command(
         name="serve data seed",
@@ -164,7 +166,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         config = await self.server_definition()
         config["seed"] = seed
         await self.save_server_definition(config)
-        return f"Server seed set to {seed}."
+        return CommandResult.append(f"Server seed set to {seed}.")
 
     @command(
         name="serve data identity",
@@ -187,7 +189,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             "revision": revision,
         }
         await self.save_server_definition(config)
-        return "Server identification updated."
+        return CommandResult.append("Server identification updated.")
 
     @command(
         name="serve data table",
@@ -211,7 +213,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             unmapped=unmapped, default=self.raw_value(default)
         )
         await self.save_server_definition(config)
-        return f"{table}: unmapped={unmapped}, default={default}."
+        return CommandResult.append(f"{table}: unmapped={unmapped}, default={default}.")
 
     @staticmethod
     def raw_value(text):
@@ -263,7 +265,9 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                 ]
                 existing.append({"start": span.start, "end": span.stop - 1, **rule})
         await self.save_server_definition(config)
-        return f"Set {rule['mode']} behavior for {target} {selection}."
+        return CommandResult.append(
+            f"Set {rule['mode']} behavior for {target} {selection}."
+        )
 
     @command(
         name="serve data set",
@@ -337,7 +341,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         if interval is not None:
             config["hooks"]["tick_seconds"] = interval
         await self.save_server_definition(config)
-        return f"Configured {name}: {function}."
+        return CommandResult.append(f"Configured {name}: {function}.")
 
     @command(
         name="serve hook read",
@@ -381,7 +385,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         config = await self.server_definition()
         config["hooks"] = {}
         await self.save_server_definition(config)
-        return "Server hooks cleared."
+        return CommandResult.append("Server hooks cleared.")
 
     async def validate_server_tags(self, config):
         """Require server tags to match their shared project definitions."""
@@ -415,7 +419,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         else:
             raise CommandError("Target must be tag or a Modbus table")
         await self.save_server_definition(config)
-        return "Server rules removed."
+        return CommandResult.append("Server rules removed.")
 
     @command(name="serve data validate")
     async def serve_data_validate(self):
@@ -423,7 +427,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         config = await self.server_definition()
         await self.validate_server_tags(config)
         await asyncio.to_thread(Simulator.load_hooks, config)
-        return (
+        return CommandResult.append(
             "Server configuration valid. "
             "Listener binding and hook behavior are not tested."
         )
@@ -458,7 +462,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                     ]
                     lines.append(f"{name} = {decode_tag_value(tag, raw)!r}")
         lines.append(self.server.state.show(await self.tags.list()))
-        return "\n".join(lines)
+        return CommandResult.append("\n".join(lines))
 
     @command(name="connect data show")
     async def connect_data_show(self):
@@ -470,7 +474,9 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             if self.connection.connected
             else "Disconnected; last session evidence retained"
         )
-        return heading + "\n" + self.client_state.show(await self.tags.list())
+        return CommandResult.append(
+            heading + "\n" + self.client_state.show(await self.tags.list())
+        )
 
     async def start_server(self, settings, foreground=False, **tls):
         """Start in background for TUI, or wait until stopped in explicit
@@ -586,13 +592,13 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
     async def serve_stop(self):
         """Stop the listener and drain local/proxy work; keep the client connection."""
         await self.server.stop()
-        return "Server stopped."
+        return CommandResult.append("Server stopped.")
 
     @command(name="serve status")
     async def serve_status(self):
         """Show listener, proxy mode and the last hook/transport/storage error."""
         mode = "proxy" if self.server.proxy else "local"
-        return (
+        return CommandResult.append(
             f"Server: {self.server.label}\nMode: {mode}\n"
             f"Last error: {self.server.last_error or 'none'}"
         )
@@ -612,7 +618,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             current = self.server.simulator
             self.server.simulator = Simulator(current.config, current.hooks)
         self.server.state.rows.clear()
-        return "Local simulation reset."
+        return CommandResult.append("Local simulation reset.")
 
     @command(name="proxy enable")
     async def proxy_enable(self):
@@ -633,7 +639,9 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             ):
                 raise CommandError("Proxy cannot forward to its own listener")
         self.server.proxy = True
-        return "Proxy enabled. New requests use the upstream device."
+        return CommandResult.append(
+            "Proxy enabled. New requests use the upstream device."
+        )
 
     @command(name="proxy disable")
     async def proxy_disable(self):
@@ -641,11 +649,13 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         normally.
         """
         self.server.proxy = False
-        return "Proxy disabled. New requests use local simulation."
+        return CommandResult.append(
+            "Proxy disabled. New requests use local simulation."
+        )
 
     @command(name="proxy status")
     async def proxy_status(self):
         """Show forwarding mode and upstream connection readiness."""
         mode = "enabled" if self.server.proxy else "disabled"
         upstream = "connected" if self.connection.connected else "unavailable"
-        return f"Proxy: {mode}\nUpstream: {upstream}"
+        return CommandResult.append(f"Proxy: {mode}\nUpstream: {upstream}")

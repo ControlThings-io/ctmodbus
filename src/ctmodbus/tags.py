@@ -500,8 +500,8 @@ class TagCommandMixin:
     """Commands for typed tags using app-owned tags and protocol services.
 
     ctui signatures/decorators define command syntax. Read/write/create/rename/
-    delete return append CommandResult; listing, inspection, and file commands
-    return text. Expected input/protocol errors use CommandError. Store and
+    delete/list/inspection/file commands return append CommandResult. Expected
+    input/protocol errors use CommandError. Store and
     unexpected file errors can propagate; no mixin-wide serialization is added.
     """
 
@@ -563,11 +563,11 @@ class TagCommandMixin:
 
     @command(name="tags list")
     async def tag_list(self):
-        """List tags in the active project."""
+        """Append the active project tag table, or an empty-list message."""
         tags = await self.tags.list()
         if not tags:
-            return "No tags."
-        return tabulate(
+            return CommandResult.append("No tags.")
+        output = tabulate(
             [
                 (
                     tag.name,
@@ -582,14 +582,17 @@ class TagCommandMixin:
             ],
             headers=("Name", "Table", "Address", "Count", "Type", "Byte", "Word"),
         )
+        return CommandResult.append(output)
 
     @command(name="tags show", arguments={"name": Argument(completer=complete_tags)})
     async def tag_show(self, name: str):
-        """Show one tag and its derived address range."""
+        """Append one tag and its derived address range."""
         tag = await self.tags.get(name)
         values = tag.as_dict()
         values["range"] = f"{tag.address}-{tag.stop - 1}"
-        return "\n".join(f"{key}: {value}" for key, value in values.items())
+        return CommandResult.append(
+            "\n".join(f"{key}: {value}" for key, value in values.items())
+        )
 
     @command(name="tags rename", arguments={"name": Argument(completer=complete_tags)})
     async def tag_rename(self, name: str, new_name: str):
@@ -697,7 +700,7 @@ class TagCommandMixin:
         },
     )
     async def tag_export(self, path: Path):
-        """Write name-sorted project tags to PATH and return destination text.
+        """Write name-sorted project tags to PATH and append destination text.
 
         Append .toml unless the existing suffix matches case-insensitively.
         Synchronously write PATH.tmp then os.replace the destination. The rename
@@ -718,7 +721,7 @@ class TagCommandMixin:
             except FileNotFoundError:
                 pass
             raise CommandError(f"Cannot export tags: {error}") from error
-        return f"Exported tags to {path}."
+        return CommandResult.append(f"Exported tags to {path}.")
 
     @command(
         name="tags import",
@@ -728,7 +731,7 @@ class TagCommandMixin:
         },
     )
     async def tag_import(self, path: Path, replace: bool = False):
-        """Validate PATH and merge tags, returning the imported count as text.
+        """Validate PATH and merge tags, appending the imported count.
 
         Dispatch supplies validated, confirmed data for the current task and
         guards project/tag mutations. Direct calls validate the file and never
@@ -747,4 +750,4 @@ class TagCommandMixin:
                 + ". Re-run with --replace to overwrite them."
             )
         await self.tags.import_all(tags, replace=replace)
-        return f"Imported {len(tags)} tags."
+        return CommandResult.append(f"Imported {len(tags)} tags.")

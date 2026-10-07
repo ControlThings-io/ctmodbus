@@ -113,6 +113,16 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.app.backend.open()
 
+        def verify_output(command, result):
+            """Require append semantics for ctmodbus output, preserving ctui defaults."""
+            if (
+                command.name.split()[0] in {"tags", "connect", "serve", "proxy"}
+                and result.output is not None
+            ):
+                self.assertTrue(result.append_output, command.name)
+
+        self.app.on("command_finished", verify_output)
+
     async def asyncTearDown(self):
         """Stop application tasks, close project storage, and remove temporary data."""
         await self.app.on_stop()

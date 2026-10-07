@@ -2,6 +2,9 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Append output from all ctmodbus-owned tag, connection, server and proxy
+  commands; retain ctui built-in command behavior.
+
 - Add fixed-cadence `poll tags` and multi-table `poll raw` with configurable
   intervals, count/duration limits, status and graceful stop. Append compact
   aligned typed/raw rows with a `#` counter in terminal and browser sessions,

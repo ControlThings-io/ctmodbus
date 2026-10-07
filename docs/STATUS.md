@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-06, `dev-v1.0.0` at `b8af8e4`, with local polling
-implementation and aligned output, regression coverage, and usage documentation.
+Last reconciled: 2026-10-06, `dev-v1.0.0` at `236ef82`, with local application-owned
+command output append behavior.
 
 ## Current state
 
@@ -73,6 +73,14 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 6 append policy on `236ef82` plus the working tree: all 97 tests
+  passed with adjacent editable ctui. Existing command/tag/server regressions
+  now assert append semantics for application-owned tags/connect/serve/proxy
+  output, including empty tag lists. Black/isort, pylint (10.00/10), and
+  whitespace checks passed. All these command results append;
+  configs/history/projects and other ctui built-ins remain unchanged. See
+  [D15](DECISIONS.md#d15--append-output-from-application-owned-commands).
 
 - October 6 polling alignment refinement on `b8af8e4` plus the working tree:
   all 14 focused polling tests and the real TUI test passed on Python 3.11

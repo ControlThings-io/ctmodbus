@@ -313,3 +313,13 @@ and full raw range lengths. Right-align counters/numeric tags and left-align
 booleans/raw sequences. Float32/64 use 9/17 significant digits to retain
 round-trip precision in a compact representation. Widen overflowing columns and
 repeat the header before the affected row; do not rewrite previous output.
+
+## D15 — Append output from application-owned commands
+
+Accepted at the owner's request, 2026-10-06.
+
+All ctmodbus-owned commands default to `CommandResult.append` for output;
+replace or clear only when explicitly requested. This includes discovery, tag
+inspection/exchange, server configuration/status, and proxy controls as well as
+device operations. Keep the rule in AGENTS.md for future commands. Leave ctui
+built-ins, including configs, history, projects, help, and clear, unchanged.

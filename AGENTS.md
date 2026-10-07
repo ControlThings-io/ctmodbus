@@ -30,6 +30,10 @@ configs for profiles and records for decoded operations; never persist live
 clients/tasks. Preserve the policies in the decision log when changing these
 boundaries. Expansion beyond the agreed feature set requires an actual task.
 
+All ctmodbus-owned commands must append output by default using
+`CommandResult.append`; replace or clear output only when explicitly requested.
+Leave ctui-owned commands and their output policies unchanged.
+
 Give every new positional `@command` argument a brief, meaningful
 `Argument.help` message. Keep this generic argument help out of repeated
 completion rows; when individual choices need distinct explanations, use the

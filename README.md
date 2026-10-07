@@ -156,6 +156,10 @@ Concurrent exports still assume sequential use. See the
 [documented concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
 before embedding concurrent tag-management or project-switching commands.
 
+ctmodbus-owned commands append to existing output, including all `tags`,
+`connect`, `serve`, and `proxy` results. Built-in ctui commands such as `configs`,
+`history`, and `project` retain their framework-defined output behavior.
+
 ## Polling
 
 Start one poll in the TUI or WUI; commands remain available while it runs.
