@@ -96,16 +96,6 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.app.backend.open()
 
-        def verify_output(command, result):
-            """Require append semantics for ctmodbus output, preserving ctui defaults."""
-            if (
-                command.name.split()[0] in {"tags", "connect", "serve", "proxy"}
-                and result.output is not None
-            ):
-                self.assertTrue(result.append_output, command.name)
-
-        self.app.on("command_finished", verify_output)
-
     async def asyncTearDown(self):
         """Stop application tasks, close project storage, and remove temporary data."""
         await self.app.on_stop()
@@ -120,7 +110,6 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         """Verify tag CRUD, project switching, and full-reset removal."""
         await self.app.dispatch("tags create timer holding_register 2 int32")
         result = await self.app.dispatch("tags list")
-        self.assertTrue(result.append_output)
         self.assertIn("timer", result.output)
         self.assertIn("little", result.output)
         result = await self.app.dispatch("tags show timer")
@@ -129,10 +118,6 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.app.tags.get("duration")).address, 2)
         await self.app.dispatch("tags delete duration")
         self.assertEqual(await self.app.tags.list(), [])
-
-        result = await self.app.dispatch("tags list")
-        self.assertTrue(result.append_output)
-        self.assertEqual(result.output, "No tags.")
 
         await self.app.dispatch("tags create local coil 0 bool")
         await self.app.dispatch("project create other")

@@ -490,8 +490,8 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
 
     @command(name="connect")
     async def connect_suggestions(self):
-        """Append serial-device and local-service discovery without connecting."""
-        return CommandResult.append(await asyncio.to_thread(suggestions))
+        """List local serial devices and listening services."""
+        return await asyncio.to_thread(suggestions)
 
     async def open_connection(self, settings):
         """Return an appended OPENED result after connection and recording start.
