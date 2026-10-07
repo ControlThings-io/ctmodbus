@@ -313,3 +313,21 @@ and full raw range lengths. Right-align counters/numeric tags and left-align
 booleans/raw sequences. Float32/64 use 9/17 significant digits to retain
 round-trip precision in a compact representation. Widen overflowing columns and
 repeat the header before the affected row; do not rewrite previous output.
+
+## D15 — Independent server and proxy request display
+
+Accepted at the owner's request, 2026-10-06.
+
+Append one incoming-request line per decoded server PDU and another when proxy
+forwarding starts, sharing an application-local monotonic request ID. Log server
+arrival before queuing and proxy dispatch after unit mapping. Show UTC timestamps,
+peer/upstream, unit, function/range, and bounded write previews; retain full writes
+in server records. These lines describe attempted activity, never success.
+
+Default both routine streams on. Each enabling command has `--quiet`, and live
+`serve logging` / `proxy logging` switches independently control them. Errors
+remain visible when quiet; record collection is unaffected. Settings are runtime
+state, reset by each enabling command. Use a shared synchronous output append
+helper for polling and logs so no await interleaves updates to existing output.
+Do not reinstate the reverted append default for all command results. MITM output
+remains future work, without rules or extra feature scope in this implementation.

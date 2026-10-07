@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-06, `dev-v1.0.0` at `b8af8e4`, with local polling
-implementation and aligned output, regression coverage, and usage documentation.
+Last reconciled: 2026-10-06, `dev-v1.0.0` at `aad20cd`, with local server/proxy
+request logging, quiet controls, and shared runtime output appends.
 
 ## Current state
 
@@ -47,6 +47,17 @@ implementation and aligned output, regression coverage, and usage documentation.
   Targets are stable and cancel/close/shutdown stop polling. See
   [Polling](../README.md#polling) and [D14](DECISIONS.md#d14--fixed-cadence-polling-and-appended-evidence-rows).
 
+- Server request arrivals and proxy forwarding now append correlated UTC lines
+  by default. Every listener and `proxy enable` support `--quiet`; independent
+  live `serve logging` / `proxy logging` switches suppress routine lines while
+  preserving errors and operation records. Status shows logging state; write
+  previews are bounded and records retain full payloads. See
+  [request display controls](SERVER.md#request-display-controls) and
+  [D15](DECISIONS.md#d15--independent-server-and-proxy-request-display).
+- The `aad20cd` revert removed the application-wide append default. Ordinary
+  command output follows existing per-command behavior; runtime request/polling
+  lines explicitly append. ctui built-in commands remain unchanged.
+
 ## Next steps and validation gaps
 
 1. Multi-tag serialization/partial output and tag-import confirmation, atomic
@@ -73,6 +84,22 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 6 proxy display follow-up: proxy request lines now use `unit=<value>`,
+  matching server lines while retaining the actual mapped upstream unit. The
+  focused proxy logging/quiet/error regression passed; README example updated.
+
+- October 6 request logging on `aad20cd` plus the working tree, Python 3.11.16
+  with adjacent ctui at `ec16fb1`: all 101 tests passed, including actual
+  TCP/UDP/TLS and PTY servers/proxying, real TUI/WUI output, and polling.
+  New checks cover default arrivals, shared server/proxy request IDs, unit
+  mapping, independent quiet/live switches, visible quiet-mode errors, UTC
+  timestamps, escaped controls, bounded previews/full recorded write payloads,
+  restart defaults, browser append preservation, and CLI stream selection.
+  Black/isort, pylint (10.00/10), lockfile and whitespace checks passed.
+  Dependency metadata is unchanged. Physical-device and sustained manual UI
+  checks, remote matrix CI, distribution artifacts, and publication were not
+  performed.
 
 - October 6 polling alignment refinement on `b8af8e4` plus the working tree:
   all 14 focused polling tests and the real TUI test passed on Python 3.11

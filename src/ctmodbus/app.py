@@ -119,6 +119,24 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
             "udp-local", ConnectionSettings("udp", "127.0.0.1").as_dict()
         )
 
+    def append_output(self, text: str) -> None:
+        """Append runtime output synchronously to TUI/WUI or the active CLI stream.
+
+        Read the current widget at append time. No await permits competing tasks
+        to interleave a read/modify/write; callers supply safely rendered text.
+        """
+        if self._poll_stdout is not None:
+            print(text, file=self._poll_stdout, flush=True)
+            return
+        layout = getattr(self, "layout", None)
+        current = layout.output_field.text if layout else self.output_text
+        self.output_text = f"{current.rstrip()}\n{text}" if current else text
+        if layout:
+            layout.set_output(self.output_text)
+        runtime = getattr(self, "app", None)
+        if runtime:
+            runtime.invalidate()
+
     def connection_status(self):
         """Describe project, transport state, and active read progress."""
         settings = self.connection.settings

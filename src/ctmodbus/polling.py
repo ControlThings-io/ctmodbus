@@ -144,19 +144,7 @@ class Poll:  # pylint: disable=protected-access
 
     def append(self, text):
         """Append one safe line/header to TUI/WUI output or the CLI stream."""
-        stream = self.app._poll_stdout
-        if stream is not None:
-            print(text, file=stream, flush=True)
-            return
-        layout = getattr(self.app, "layout", None)
-        current = layout.output_field.text if layout else self.app.output_text
-        output = f"{current.rstrip()}\n{text}" if current else text
-        self.app.output_text = output
-        if layout:
-            layout.set_output(output)
-        runtime = getattr(self.app, "app", None)
-        if runtime:
-            runtime.invalidate()
+        self.app.append_output(text)
 
     async def start(self, columns, interval, count, duration):
         """Validate limits/session; reject replacement and empty targets.

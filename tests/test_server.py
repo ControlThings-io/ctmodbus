@@ -611,3 +611,126 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             self.app.client_state.rows["holding_registers", 3]["outcome"], "not sent"
         )
         client.close()
+
+    async def test_request_lines_quiet_switches_and_records(self):
+        """Routine arrivals append; live quiet switches preserve records and errors."""
+        client = await self.client()
+        self.app.output_text = "Earlier output"
+        await client.read_holding_registers(0, count=2, device_id=1)
+        lines = self.app.output_text.splitlines()
+        self.assertEqual(lines[0], "Earlier output")
+        self.assertIn("SERVER #1 peer=", lines[1])
+        self.assertIn("unit=1 read holding_registers 0-1", lines[1])
+        self.assertRegex(lines[1], r"^\d{4}-\d\d-\d\dT.*\+00:00 SERVER")
+        await self.app.dispatch("serve logging off")
+        self.app.output_text = "Quiet"
+        await client.read_coils(0, count=1, device_id=1)
+        self.assertEqual(self.app.output_text, "Quiet")
+        config = self.app.server.config
+        config["tables"]["holding_registers"]["unmapped"] = "illegal"
+        config["tables"]["holding_registers"]["ranges"] = []
+        # Replace the runtime simulator only for this error fixture.
+        self.app.server.simulator = Simulator(config)
+        response = await client.read_holding_registers(0, count=1, device_id=1)
+        self.assertTrue(response.isError())
+        self.assertIn("SERVER #3 ERROR exception=2", self.app.output_text)
+        records = await self.app.records.query(
+            direction="received", protocol="modbus-server"
+        )
+        self.assertEqual(len(records), 3)
+        self.assertEqual([row.decoded["request_id"] for row in records], [1, 2, 3])
+        await self.app.dispatch("serve logging on")
+        self.assertIn(
+            "Request logging: on", (await self.app.dispatch("serve status")).output
+        )
+
+    async def test_proxy_lines_independent_quiet_and_failure(self):
+        """Forwarding lines share IDs, show mapped units, and retain quiet-mode errors."""
+        upstream = make_server("tcp")
+        await upstream.serve_forever(background=True)
+        port = upstream.transport.sockets[0].getsockname()[1]
+        try:
+            await self.app.dispatch(f"connect tcp 127.0.0.1 --port {port}")
+            await self.app.dispatch("serve data unit 7")
+            downstream = free_port()
+            await self.app.dispatch(f"serve tcp 127.0.0.1 --port {downstream} --quiet")
+            client = AsyncModbusTcpClient(
+                "127.0.0.1", port=downstream, timeout=0.5, retries=0
+            )
+            self.clients.append(client)
+            self.assertTrue(await client.connect())
+            await self.app.dispatch("proxy enable")
+            self.app.output_text = ""
+            await client.read_holding_registers(0, count=1, device_id=7)
+            self.assertNotIn("SERVER", self.app.output_text)
+            self.assertIn("PROXY  #1 upstream=TCP", self.app.output_text)
+            self.assertIn("unit=1 read holding_registers 0", self.app.output_text)
+            await self.app.dispatch("serve logging on")
+            await self.app.dispatch("proxy logging off")
+            self.app.output_text = ""
+            await client.read_holding_registers(0, count=1, device_id=7)
+            self.assertIn("SERVER #2", self.app.output_text)
+            self.assertNotIn("PROXY", self.app.output_text)
+            await self.app.dispatch("proxy logging on")
+            self.app.output_text = ""
+            await client.write_register(0, 113, device_id=7)
+            self.assertIn("SERVER #3", self.app.output_text)
+            self.assertIn("PROXY  #3", self.app.output_text)
+            self.assertEqual(self.app.output_text.count("values=0071"), 2)
+            await self.app.dispatch("proxy enable --quiet")
+            await self.app.dispatch("serve logging off")
+            self.app.output_text = ""
+            await client.read_holding_registers(1000, count=1, device_id=7)
+            self.assertIn("PROXY  #4 ERROR upstream exception=2", self.app.output_text)
+            self.assertIn("SERVER #4 ERROR exception=2", self.app.output_text)
+            self.assertIn(
+                "Logging: off", (await self.app.dispatch("proxy status")).output
+            )
+        finally:
+            await upstream.shutdown()
+
+    async def test_log_preview_limits_escaping_and_restart_defaults(self):
+        """Bound write previews, escape controls, and reset quiet policy on restart."""
+        client = await self.client()
+        await client.write_registers(0, list(range(20)), device_id=1)
+        self.assertIn("(+4 omitted)", self.app.output_text)
+        records = await self.app.records.query(
+            direction="received", protocol="modbus-server"
+        )
+        self.assertEqual(records[-1].decoded["values"], list(range(20)))
+        self.assertNotIn(
+            "values=0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 000A 000B 000C 000D 000E 000F 0010",
+            self.app.output_text,
+        )
+        self.app.server.log_line("SERVER", 99, "ERROR bad\n\x1b[31m")
+        self.assertIn(r"ERROR bad\n\x1b[31m", self.app.output_text)
+        await self.app.dispatch("serve logging off")
+        await self.app.dispatch("serve stop")
+        await self.client()
+        self.assertTrue(self.app.server.request_logging)
+
+    async def test_request_logs_in_web_and_cli_output(self):
+        """Request lines use the real browser layout and selected CLI output stream."""
+        import io
+
+        from ctui.web import WebSession
+
+        client = await self.client()
+        session = WebSession(self.app, port=0, stdout=io.StringIO())
+        try:
+            await session.start()
+            self.app.layout.set_output("Existing browser output")
+            await client.read_coils(0, count=2, device_id=1)
+            text = self.app.layout.output_field.text
+            self.assertTrue(text.startswith("Existing browser output\n"))
+            self.assertIn("SERVER #1", text)
+            stream = io.StringIO()
+            self.app._poll_stdout = stream
+            try:
+                await client.read_coils(0, count=1, device_id=1)
+            finally:
+                self.app._poll_stdout = None
+            self.assertIn("SERVER #2", stream.getvalue())
+            self.assertNotIn("SERVER #2", self.app.layout.output_field.text)
+        finally:
+            await session.close()

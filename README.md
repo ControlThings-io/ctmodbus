@@ -360,3 +360,43 @@ connect data show
 `proxy enable` routes incoming server requests through the connected client;
 `proxy disable` restores local behavior. See [server and proxy usage](docs/SERVER.md)
 for all commands, foreground CLI serving, hooks, defaults and evidence semantics.
+
+### Server and proxy request output
+
+Server listeners append one line per decoded incoming request by default.
+Enabling the proxy adds a forwarding line with the same application-local request
+ID. Lines include UTC millisecond timestamps, source, peer or upstream endpoint,
+unit, function/table, and address range. Writes show compact bits or four-digit
+hex registers, capped at 16 displayed values with an omitted-value count; server
+operation records retain the full write payload. Arrival/forwarding lines do not
+imply a successful response or write acknowledgement.
+
+```text
+serve tcp 127.0.0.1 --port 5020 --quiet
+proxy enable --quiet
+serve logging on
+proxy logging on
+serve logging off
+proxy logging off
+serve status
+proxy status
+```
+
+`--quiet` is available on every `serve` transport and on `proxy enable`. Server
+arrival and proxy forwarding logging are independent. Live `logging on/off`
+commands change routine verbosity without stopping the listener or disabling
+records. Starting a listener or enabling the proxy resets its logging policy
+from that command's `--quiet` option; settings are runtime-only.
+
+```text
+2026-10-06T14:32:05.123+00:00 SERVER #42 peer=('127.0.0.1', 53120) unit=1 read holding_registers 10-12
+2026-10-06T14:32:05.124+00:00 PROXY  #42 upstream=TCP 192.168.1.20:502 unit=7 read holding_registers 10-12
+```
+
+Request failures remain visible in quiet mode. Failed proxy writes distinguish
+potentially unconfirmed outcomes; upstream exceptions are shown without implying
+forwarding success. Display escapes control characters. Polling and server logs
+share one synchronous append path for terminal, browser, and CLI output. CLI
+listeners still need `--foreground` to remain running. Malformed/unsupported
+requests that the decoder reports also produce diagnostic lines. Future MITM
+logging is not implemented.

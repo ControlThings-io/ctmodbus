@@ -277,3 +277,15 @@ partial/separate observations are labelled explicitly. State is runtime-only,
 cleared on a fresh connection/server run and project change, but durable decoded
 operation records remain. Future MITM rules will use a separate TOML file;
 only request/response extension seams exist today.
+
+## Request display controls
+
+Listeners default to appending request-arrival lines; proxy mode additionally
+appends forwarding lines with the same request ID. `--quiet` on any `serve`
+transport suppresses routine server lines. `proxy enable --quiet` independently
+suppresses routine forwarding lines. `serve logging on/off` and
+`proxy logging on/off` update these policies live, and status commands show them.
+Errors bypass both quiet settings; operation recording is independent of display.
+Request IDs increase across listener restarts within an application, and verbosity
+settings are runtime-only. See the [usage examples](../README.md#server-and-proxy-request-output)
+for timestamps, compact previews, and CLI behavior.

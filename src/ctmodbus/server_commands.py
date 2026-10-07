@@ -37,12 +37,20 @@ NETWORK_ARGS = {
     "host": Argument(help="Local bind address"),
     "port": Argument(flags=("--port",)),
     "foreground": Argument(flags=("--foreground",)),
+    "quiet": Argument(flags=("--quiet",)),
 }
 SERIAL_ARGS = {
     "device": Argument(help="Local serial device path"),
     **{
         name: Argument(flags=("--" + name.replace("_", "-"),))
-        for name in ("baudrate", "bytesize", "parity", "stopbits", "foreground")
+        for name in (
+            "baudrate",
+            "bytesize",
+            "parity",
+            "stopbits",
+            "foreground",
+            "quiet",
+        )
     },
 }
 
@@ -472,7 +480,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         )
         return heading + "\n" + self.client_state.show(await self.tags.list())
 
-    async def start_server(self, settings, foreground=False, **tls):
+    async def start_server(self, settings, foreground=False, quiet=False, **tls):
         """Start in background for TUI, or wait until stopped in explicit
         foreground mode.
         """
@@ -480,7 +488,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             config = await self.server_definition()
             await self.validate_server_tags(config)
             settings = replace_settings(settings, unit=config["unit"])
-            await self.server.start(config, settings, **tls)
+            await self.server.start(config, settings, quiet=quiet, **tls)
         except (OSError, ValueError, RuntimeError) as error:
             raise CommandError(f"Server start failed: {error}") from error
         if foreground:
@@ -492,20 +500,28 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
 
     @command(name="serve tcp", arguments=NETWORK_ARGS)
     async def serve_tcp(
-        self, host: str = "127.0.0.1", port: int = 5020, foreground: bool = False
+        self,
+        host: str = "127.0.0.1",
+        port: int = 5020,
+        foreground: bool = False,
+        quiet: bool = False,
     ):
         """Serve Modbus TCP; --foreground keeps command-line mode alive."""
         return await self.start_server(
-            ConnectionSettings("tcp", host, port=port), foreground
+            ConnectionSettings("tcp", host, port=port), foreground, quiet=quiet
         )
 
     @command(name="serve udp", arguments=NETWORK_ARGS)
     async def serve_udp(
-        self, host: str = "127.0.0.1", port: int = 5020, foreground: bool = False
+        self,
+        host: str = "127.0.0.1",
+        port: int = 5020,
+        foreground: bool = False,
+        quiet: bool = False,
     ):
         """Serve Modbus UDP from the local definition."""
         return await self.start_server(
-            ConnectionSettings("udp", host, port=port), foreground
+            ConnectionSettings("udp", host, port=port), foreground, quiet=quiet
         )
 
     @command(
@@ -526,11 +542,13 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         key_file: str | None = None,
         ca_file: str | None = None,
         foreground: bool = False,
+        quiet: bool = False,
     ):
         """Serve native Modbus TLS; optional CA roots require client certificates."""
         return await self.start_server(
             ConnectionSettings("tls", host, port=port),
             foreground,
+            quiet=quiet,
             cert_file=cert_file,
             key_file=key_file,
             ca_file=ca_file,
@@ -545,6 +563,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         parity: Literal["N", "E", "O"] = "N",
         stopbits: int = 1,
         foreground: bool = False,
+        quiet: bool = False,
     ):
         """Respond as an RTU device on a local serial port, not a traffic tap."""
         return await self.start_server(
@@ -557,6 +576,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                 stopbits=stopbits,
             ),
             foreground,
+            quiet=quiet,
         )
 
     @command(name="serve ascii", arguments=SERIAL_ARGS)
@@ -568,6 +588,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         parity: Literal["N", "E", "O"] = "N",
         stopbits: int = 1,
         foreground: bool = False,
+        quiet: bool = False,
     ):
         """Respond as an ASCII device on a local serial port."""
         return await self.start_server(
@@ -580,6 +601,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
                 stopbits=stopbits,
             ),
             foreground,
+            quiet=quiet,
         )
 
     @command(name="serve stop")
@@ -594,6 +616,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         mode = "proxy" if self.server.proxy else "local"
         return (
             f"Server: {self.server.label}\nMode: {mode}\n"
+            f"Request logging: {'on' if self.server.request_logging else 'off'}\n"
+            f"Proxy logging: {'on' if self.server.proxy_logging else 'off'}\n"
             f"Last error: {self.server.last_error or 'none'}"
         )
 
@@ -614,8 +638,8 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         self.server.state.rows.clear()
         return "Local simulation reset."
 
-    @command(name="proxy enable")
-    async def proxy_enable(self):
+    @command(name="proxy enable", arguments={"quiet": Argument(flags=("--quiet",))})
+    async def proxy_enable(self, quiet: bool = False):
         """Forward server-unit requests to the connected unit; local rules are
         bypassed.
         """
@@ -633,6 +657,7 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
             ):
                 raise CommandError("Proxy cannot forward to its own listener")
         self.server.proxy = True
+        self.server.proxy_logging = not quiet
         return "Proxy enabled. New requests use the upstream device."
 
     @command(name="proxy disable")
@@ -648,4 +673,29 @@ class ServerCommandMixin:  # pylint: disable=too-many-public-methods
         """Show forwarding mode and upstream connection readiness."""
         mode = "enabled" if self.server.proxy else "disabled"
         upstream = "connected" if self.connection.connected else "unavailable"
-        return f"Proxy: {mode}\nUpstream: {upstream}"
+        return (
+            f"Proxy: {mode}\nUpstream: {upstream}\n"
+            f"Logging: {'on' if self.server.proxy_logging else 'off'}"
+        )
+
+    @command(
+        name="serve logging",
+        arguments={
+            "state": Argument(help="Enable or disable routine server request lines")
+        },
+    )
+    def serve_logging(self, state: Literal["on", "off"]):
+        """Change server verbosity; errors remain visible and records unchanged."""
+        self.server.request_logging = state == "on"
+        return CommandResult.append(f"Server request logging {state}.")
+
+    @command(
+        name="proxy logging",
+        arguments={
+            "state": Argument(help="Enable or disable routine proxy forwarding lines")
+        },
+    )
+    def proxy_logging(self, state: Literal["on", "off"]):
+        """Change live forwarding verbosity independently of server arrival logging."""
+        self.server.proxy_logging = state == "on"
+        return CommandResult.append(f"Proxy request logging {state}.")

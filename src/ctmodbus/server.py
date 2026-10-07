@@ -46,6 +46,7 @@ from pymodbus.simulator import DataType, SimData, SimDevice
 from pymodbus.transaction import TransactionManager
 
 from ctmodbus.data_state import DataState
+from ctmodbus.formatting import timestamp
 from ctmodbus.server_config import validate
 from ctmodbus.simulation import Simulator
 from ctmodbus.tags import decode_tag_value
@@ -115,6 +116,14 @@ class OwnedHandler(ServerRequestHandler):
             try:
                 used = TransactionManager.callback_data(self, data[total:], addr)
             except ModbusIOException as error:
+                owner = self.server.owner
+                owner.request_counter += 1
+                owner.log_line(
+                    "SERVER",
+                    owner.request_counter,
+                    f"peer={addr!r} unit={error.dev_id} "
+                    f"function=0x{error.fcode or 0:02X} ERROR {error}",
+                )
                 self.server_send(
                     ExceptionResponse(
                         error.fcode or 0,
@@ -142,13 +151,18 @@ class OwnedHandler(ServerRequestHandler):
 
     async def dispatch_request(self, request, address):
         """Return a response through the original framing and transaction ID."""
+        request_id = "?"
         try:
+            peer = address or (
+                self.transport.get_extra_info("peername") if self.transport else None
+            )
+            request_id = self.server.owner.begin_request(request, peer)
             if (
                 self.server.owner.serial_device
                 and request.dev_id != self.server.owner.config["unit"]
             ):
                 return
-            response = await self.server.owner.handle(request)
+            response = await self.server.owner.handle(request, request_id=request_id)
             response.transaction_id = request.transaction_id
             response.dev_id = request.dev_id
             self.server_send(response, address)
@@ -156,6 +170,7 @@ class OwnedHandler(ServerRequestHandler):
             pass
         except Exception as error:  # pylint: disable=broad-exception-caught
             self.server.owner.last_error = str(error)
+            self.server.owner.log_line("SERVER", request_id, f"ERROR {error}")
             self.server_send(
                 ExceptionResponse(
                     request.function_code,
@@ -231,6 +246,9 @@ class Server:
         self.lifecycle = asyncio.Lock()
         self.serial_device = None
         self.stopping = False
+        self.request_logging = True
+        self.proxy_logging = True
+        self.request_counter = 0
 
     async def record(self, direction, item):
         """Record server exchanges without turning storage errors into protocol
@@ -248,7 +266,7 @@ class Server:
                 self.last_error = f"Recording warning: {error}"
 
     async def start(
-        self, config, settings, cert_file=None, key_file=None, ca_file=None
+        self, config, settings, cert_file=None, key_file=None, ca_file=None, quiet=False
     ):
         """Bind one listener; failure closes candidates and leaves the server
         stopped.
@@ -304,6 +322,8 @@ class Server:
                 self.config = config
                 self.stop_event = asyncio.Event()
                 self.proxy = False
+                self.request_logging = not quiet
+                self.proxy_logging = True
                 self.last_error = ""
                 self.state = DataState(f"Downstream {settings.label}")
                 self.session = await self.app.records.start_session(
@@ -385,6 +405,7 @@ class Server:
                     await self.simulator.tick(elapsed)
             except Exception as error:  # pylint: disable=broad-exception-caught
                 self.last_error = f"on_tick failed: {error}"
+                self.log_line("SERVER", "-", f"ERROR {self.last_error}")
                 await self.record(
                     "error", {"operation": "on_tick", "error": str(error)}
                 )
@@ -406,13 +427,70 @@ class Server:
             )
         return list(request.registers)
 
-    async def handle(self, request):
-        """Capture mode before queuing and serialize complete downstream exchanges."""
-        proxy = self.proxy
-        async with self.request_lock:
-            return await self.route(request, proxy)
+    def log_line(self, source, request_id, text):
+        """Append a UTC line with escaped controls; errors bypass quiet settings."""
+        safe = "".join(
+            char if char.isprintable() else ascii(char)[1:-1] for char in str(text)
+        )
+        self.app.append_output(f"{timestamp()} {source:<6} #{request_id} {safe}")
 
-    async def route(self, request, proxy):
+    def request_summary(self, request):
+        """Describe functions with at most 16 write values; records retain full data."""
+        code = request.function_code
+        if code not in TABLES:
+            return "read id" if code == 43 else f"function=0x{code:02X}"
+        count = request.count if code in (1, 2, 3, 4, 15, 16) else 1
+        address = request.address
+        end = address + count - 1
+        selection = str(address) if count == 1 else f"{address}-{end}"
+        summary = f"{'read' if code < 5 else 'write'} {TABLES[code]} {selection}"
+        if code >= 5:
+            values = self.values(request)
+            preview = values[:16]
+            text = (
+                "".join(str(int(value)) for value in preview)
+                if code in (5, 15)
+                else " ".join(f"{int(value):04X}" for value in preview)
+            )
+            summary += f" values={text}"
+            if len(values) > len(preview):
+                summary += f" (+{len(values) - len(preview)} omitted)"
+        return summary
+
+    def begin_request(self, request, peer=None):
+        """Assign a monotonic app-local ID and log arrival before serialization."""
+        self.request_counter += 1
+        request_id = self.request_counter
+        if self.request_logging:
+            self.log_line(
+                "SERVER",
+                request_id,
+                f"peer={peer!r} unit={request.dev_id} {self.request_summary(request)}",
+            )
+        return request_id
+
+    async def handle(self, request, *, request_id=None):
+        """Log arrival, capture mode, serialize exchanges, and display failures."""
+        proxy = self.proxy
+        if request_id is None:
+            request_id = self.begin_request(request)
+        async with self.request_lock:
+            response = await self.route(request, proxy, request_id)
+        if response.isError():
+            uncertain = (
+                proxy
+                and request.function_code in (5, 6, 15, 16)
+                and response.exception_code == 11
+            )
+            self.log_line(
+                "SERVER",
+                request_id,
+                f"ERROR exception={response.exception_code}"
+                + ("; write outcome unconfirmed" if uncertain else ""),
+            )
+        return response
+
+    async def route(self, request, proxy, request_id=None):
         # pylint: disable=too-many-return-statements,too-many-branches
         """Route a captured request using its mode, preserving valid-address
         semantics.
@@ -445,6 +523,8 @@ class Server:
             "received",
             {
                 "function": code,
+                "request_id": request_id,
+                "values": self.values(request) if code in (5, 6, 15, 16) else None,
                 "unit": request.dev_id,
                 "address": request.address,
                 "count": count,
@@ -452,7 +532,9 @@ class Server:
             },
         )
         response = (
-            await self.forward(request) if proxy else await self.local(request, count)
+            await self.forward(request, request_id)
+            if proxy
+            else await self.local(request, count)
         )
         if code == 43 and not response.isError():
             self.state.identification(response.information)
@@ -480,6 +562,7 @@ class Server:
             "sent",
             {
                 "function": response.function_code,
+                "request_id": request_id,
                 "exception": response.exception_code,
                 "registers": response.registers,
                 "bits": response.bits,
@@ -579,7 +662,9 @@ class Server:
         if code == 6 and response.registers != values:
             raise CommandError("Invalid upstream register acknowledgement")
 
-    async def forward(self, request):  # pylint: disable=too-many-branches
+    async def forward(
+        self, request, request_id=None
+    ):  # pylint: disable=too-many-branches,too-many-statements
         """Forward decoded PDUs under the client lock with zero retries and
         faithful exceptions.
         """
@@ -589,6 +674,14 @@ class Server:
             async with self.app.connection.operation() as (client, settings):
                 upstream = await self.before_forward(copy.deepcopy(request))
                 upstream.dev_id = settings.unit
+                if self.proxy_logging:
+                    endpoint = settings.label.rsplit(" unit ", 1)[0]
+                    self.log_line(
+                        "PROXY",
+                        request_id,
+                        f"upstream={endpoint} unit={upstream.dev_id} "
+                        f"{self.request_summary(upstream)}",
+                    )
                 values = self.values(upstream) if code in (5, 6, 15, 16) else None
                 if values is not None:
                     self.app.client_state.write(
@@ -635,8 +728,25 @@ class Server:
                             else "acknowledged; no readback"
                         ),
                     )
-                return await self.after_response(copy.deepcopy(response))
+                response = await self.after_response(copy.deepcopy(response))
+                if response.isError():
+                    self.log_line(
+                        "PROXY",
+                        request_id,
+                        f"ERROR upstream exception={response.exception_code}",
+                    )
+                return response
         except asyncio.CancelledError:
+            self.log_line(
+                "PROXY",
+                request_id,
+                "ERROR forwarding cancelled"
+                + (
+                    "; write outcome unconfirmed"
+                    if sent and code in (5, 6, 15, 16)
+                    else ""
+                ),
+            )
             if sent:
                 self.app.connection.abort()
             if code in (5, 6, 15, 16):
@@ -651,6 +761,12 @@ class Server:
             raise
         except (CommandError, OSError, ModbusException, TimeoutError) as error:
             self.last_error = f"Proxy failed: {error}"
+            uncertain = sent and code in (5, 6, 15, 16)
+            self.log_line(
+                "PROXY",
+                request_id,
+                f"ERROR {error}" + ("; write outcome unconfirmed" if uncertain else ""),
+            )
             if code in (5, 6, 15, 16):
                 self.app.client_state.write(
                     TABLES[code],

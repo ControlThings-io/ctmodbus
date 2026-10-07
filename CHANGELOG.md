@@ -2,6 +2,10 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Display correlated server-arrival and proxy-forwarding request lines by default,
+  with per-transport/proxy `--quiet`, independent live logging switches, visible
+  failures, bounded write previews, and full write payloads in server records.
+
 - Add fixed-cadence `poll tags` and multi-table `poll raw` with configurable
   intervals, count/duration limits, status and graceful stop. Append compact
   aligned typed/raw rows with a `#` counter in terminal and browser sessions,
