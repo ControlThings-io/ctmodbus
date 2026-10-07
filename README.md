@@ -156,6 +156,72 @@ Concurrent exports still assume sequential use. See the
 [documented concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
 before embedding concurrent tag-management or project-switching commands.
 
+## Polling
+
+Start one poll in the TUI or WUI; commands remain available while it runs.
+`poll tags` snapshots all tags in name order, or takes an ordered comma-separated
+list. `poll raw` takes one or more table options using the same inclusive address
+syntax as `read`. Each address/range is a separate column; table options and
+ranges retain their command-line order, including duplicates.
+
+```text
+poll tags
+poll tags timer,state,pause_sw --interval 0.1 --count 100
+poll raw --holding-registers 0-2,10-11 --coils 0-7 --interval 1 --duration 60
+poll status
+poll stop
+```
+
+The interval defaults to one second. Interval and duration are positive finite
+seconds; count is a positive number of started cycles. Both limits work in the
+TUI and WUI; when both are supplied, the first reached stops new cycles. Duration
+limits cycle starts, allowing an active cycle to finish. In CLI `-c`/`-f` mode,
+polling streams output and waits for completion before the next command; supply
+limits for scripts. An unlimited CLI poll runs until interrupted.
+
+The first cycle starts immediately. Later cycles target a fixed monotonic-clock
+schedule (`start + n × interval`), without adding response time to the interval.
+Each cycle serializes all selected reads on the existing connection. Ticks while
+that cycle or another device operation is busy are skipped, never queued or
+replayed. Event-loop delays also skip obsolete ticks. Scheduling is best effort,
+not a guarantee of exact wire timing. `poll status` reports started/completed
+cycles, skipped ticks, failed columns, limits, targets, and last cycle duration.
+
+A header and one line per started cycle append to existing output:
+
+```text
+     # |       timer | state | pause_sw
+     1 |       33000 |   113 | True
+     2 |         ERR |   114 | False
+
+     # | holding_registers:0-2 | holding_registers:10-11 | coils:0-7
+     1 | 0000 0071 80E8        | 000A 00FF               | 10110001
+     2 | 0000 0072 ERR         | 000B 0100               | 10110011
+```
+
+Column widths are set when polling starts from headers, tag type bounds, and raw
+range lengths. The `#` counter and numeric tags align right; booleans and raw
+sequences align left, with ` | ` between every column. Unlimited polls reserve
+six counter characters; bounded polls reserve at least three. If any value or
+counter outgrows its width, a wider header precedes that row; earlier rows retain
+their original spacing. Floats use up to nine significant digits for float32 and
+17 for float64, with scientific notation where appropriate and `.0` for integral
+values displayed without an exponent. Raw operation records remain unchanged.
+
+Tags display decoded integers, floats, or booleans. Raw bits use contiguous
+`0`/`1`; registers use four uppercase hex digits without `0x`, separated by
+spaces. A failed tag displays `ERR`; a raw range retains confirmed chunks and
+appends `ERR` if a later chunk fails. Other columns and cycles continue while
+the connection remains usable. Existing operation records retain confirmed raw
+values and detailed errors; previous values are never presented as fresh results.
+All completed rows append, including unchanged values.
+
+Tag definitions cannot be edited during polling or target preparation. Stop the
+poll before changing projects; polls never follow a replacement connection.
+`poll stop` stops future ticks and waits for the active cycle without closing the
+connection. `cancel`, `close`, connection loss, or application shutdown stop
+polling; cancellation closes the transport and requires explicit reconnection.
+
 ## Connection options and operation results
 
 All connections accept `--unit` (1–247), `--timeout` (seconds), and `--retries`

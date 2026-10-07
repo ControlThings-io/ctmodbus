@@ -7,6 +7,7 @@ CommandError. ctui derives usage and completion from decorated signatures.
 
 import asyncio
 import shlex
+import sys
 from dataclasses import replace
 from importlib.metadata import version
 from typing import Literal
@@ -24,6 +25,7 @@ from ctmodbus.connection import Connection, ConnectionSettings, create_client
 from ctmodbus.data_state import DataState
 from ctmodbus.discovery import complete_serial, suggestions
 from ctmodbus.operations import ModbusCommandMixin
+from ctmodbus.polling import TABLE_ARGUMENTS, Poll, PollCommandMixin
 from ctmodbus.server import Server
 from ctmodbus.server_commands import CONFIG_NAME, ServerCommandMixin
 from ctmodbus.tags import TagCommandMixin, TagStore, parse_tag_document
@@ -60,7 +62,7 @@ async def complete_profiles(context):
 
 
 class ModbusApp(  # pylint: disable=too-many-public-methods
-    ServerCommandMixin, TagCommandMixin, ModbusCommandMixin, CtuiApp
+    PollCommandMixin, ServerCommandMixin, TagCommandMixin, ModbusCommandMixin, CtuiApp
 ):
     """A Modbus client with one connection and project-scoped services.
 
@@ -89,6 +91,10 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
         self.connection = Connection(client_factory)
         self.tags = TagStore(self.backend)
         self.server = Server(self)
+        self.poller = Poll(self)
+        self._poll_orders = {}
+        self._poll_start_task = None
+        self._poll_stdout = None
         self.client_state = DataState()
         self._server_edit_task = None
         self._prepared_server_imports = {}
@@ -207,6 +213,8 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
         device_command = item.name.startswith(
             ("connect ", "read ", "write ", "profile ")
         )
+        poll_start = item.name in {"poll tags", "poll raw"}
+        device_command = device_command or poll_start
         server_import = item.name == "serve data import"
         server_start = item.name in {
             "serve tcp",
@@ -239,6 +247,14 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
             "tags delete",
             "tags import",
         }
+        if poll_start and self._poll_start_task is not None:
+            raise CommandError("A poll is already starting")
+        if (self.poller.active or self._poll_start_task is not None) and tag_mutation:
+            raise CommandError("Stop polling before changing tag definitions")
+        if poll_start and (self._tag_mutations or self._tag_import_task is not None):
+            raise CommandError("Finish tag edits before starting polling")
+        if self.poller.active and project_change:
+            raise CommandError("Stop polling before changing projects")
         if self._server_edit_task is not None and (
             project_change or tag_mutation or server_edit
         ):
@@ -303,6 +319,20 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
             self._tag_mutations.add(task)
         if importing:
             self._tag_import_task = task
+        if poll_start:
+            self._poll_start_task = task
+        if item.name == "poll raw":
+            order = []
+            for token in tokens:
+                flag = token.split("=", 1)[0]
+                matches = [
+                    name
+                    for name, argument in TABLE_ARGUMENTS.items()
+                    if flag.startswith("--") and argument.flags[0].startswith(flag)
+                ]
+                if len(matches) == 1 and matches[0] not in order:
+                    order.append(matches[0])
+            self._poll_orders[task] = order
         try:
             if server_import:
                 rejected = await self.prepare_server_import(text, kwargs)
@@ -342,6 +372,9 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
                 ) from error
             raise
         finally:
+            self._poll_orders.pop(task, None)
+            if poll_start:
+                self._poll_start_task = None
             if server_edit:
                 self._server_edit_task = None
                 self._prepared_server_imports.pop(task, None)
@@ -409,6 +442,7 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
                 for task in pending:
                     task.cancel()
                 try:
+                    await asyncio.wait_for(self.poller.stop(abort=True), timeout=5)
                     if pending:
                         await asyncio.wait_for(
                             asyncio.gather(*pending, return_exceptions=True), timeout=5
@@ -419,6 +453,20 @@ class ModbusApp(  # pylint: disable=too-many-public-methods
             finally:
                 self._closing = False
                 self.update_progress(0, 0)
+
+    async def run_cli(self, arguments, *, stdout=None, stderr=None, program=None):
+        """Stream polling rows to CLI stdout and await limits before later commands.
+
+        TUI/WUI starts remain background operations. An unlimited CLI poll runs
+        until interrupted. Delegate parsing and backend lifecycle to ctui.
+        """
+        self._poll_stdout = stdout or sys.stdout
+        try:
+            return await super().run_cli(
+                arguments, stdout=stdout, stderr=stderr, program=program
+            )
+        finally:
+            self._poll_stdout = None
 
     async def on_start(self):
         """Allow a fresh runtime to use this application instance."""

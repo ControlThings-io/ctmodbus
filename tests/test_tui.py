@@ -47,7 +47,21 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(
                             await asyncio.wait_for(finished.get(), 3), name
                         )
-                    pipe.send_text("exit\n")
+                    pipe.send_text("poll raw --coils 0-2 --interval 0.01 --count 2\n")
+                    self.assertEqual(
+                        await asyncio.wait_for(finished.get(), 3), "poll raw"
+                    )
+                    await asyncio.wait_for(app.poller.task, 3)
+                    self.assertIn(
+                        "2 | 111",
+                        " | ".join(
+                            cell.strip()
+                            for cell in app.layout.output_field.text.splitlines()[
+                                -2
+                            ].split("|")
+                        ),
+                    )
+                    pipe.send_text("exit confirm\n")
                     await asyncio.wait_for(running, 3)
                     self.assertFalse(client.connected)
                 finally:

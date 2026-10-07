@@ -2,6 +2,12 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Add fixed-cadence `poll tags` and multi-table `poll raw` with configurable
+  intervals, count/duration limits, status and graceful stop. Append compact
+  aligned typed/raw rows with a `#` counter in terminal and browser sessions,
+  retain partial read evidence,
+  and skip busy ticks without overlapping or accumulating device requests.
+
 - Add independent TCP/UDP/TLS/RTU/ASCII serving, project-scoped TOML definitions,
   sparse table defaults, typed static/random/sequence rules, transactional Python
   hooks, validation, export and runtime reset commands.

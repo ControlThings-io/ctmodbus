@@ -1,7 +1,7 @@
 # Project status
 
-Last reconciled: 2026-10-06, `dev-v1.0.0` at `759b8f7`, with local tag
-management command naming changes.
+Last reconciled: 2026-10-06, `dev-v1.0.0` at `b8af8e4`, with local polling
+implementation and aligned output, regression coverage, and usage documentation.
 
 ## Current state
 
@@ -39,6 +39,14 @@ management command naming changes.
   See [SERVER.md](SERVER.md), [D13](DECISIONS.md#d13--independent-servers-sparse-emulation-proxy-routing-and-evidence-views),
   and the pump/tank example under `examples/`. MITM rules remain deferred.
 
+- Fixed-cadence `poll tags` and multi-table `poll raw` now run one poll per app,
+  with interval/count/duration options, retained status, and graceful stop.
+  Each cycle appends one aligned typed/raw row headed by `#`, with separators
+  between all columns and repeated headers on width expansion. Busy ticks are
+  skipped and partial reads remain recorded. CLI polling streams and waits.
+  Targets are stable and cancel/close/shutdown stop polling. See
+  [Polling](../README.md#polling) and [D14](DECISIONS.md#d14--fixed-cadence-polling-and-appended-evidence-rows).
+
 ## Next steps and validation gaps
 
 1. Multi-tag serialization/partial output and tag-import confirmation, atomic
@@ -48,8 +56,9 @@ management command naming changes.
    ctui enhancements listed there remain proposals, not dependency commitments.
 2. Exercise tag completion, collision confirmation, and typed output in a real
    terminal; verify USB metadata on physical serial ports.
-   Investigate the command-suite stall with the current adjacent ctui checkout
-   before treating it as validated against ctmodbus (see October 5 evidence).
+   Manually exercise sustained polling in a real terminal/browser and against
+   physical devices. Automated TUI/WUI and cadence checks pass; backend test
+   stalls were resolved by running outside the sandbox (see October 6 evidence).
 3. Before `1.0.0rc1` release validation, select the published PyPI ctui version,
    update the dependency and lockfile if needed, and stop using the local
    editable override. Then run the [release checklist](../RELEASE_CHECKLIST.md)
@@ -59,11 +68,36 @@ management command naming changes.
 4. Obtain release approval before publication. Before stable 1.0, adopt tested
    stable ctui and repeat release gates (D08).
 
-Polling, device cloning, MITM rules, raw/fuzzy requests, tunneling, and
+Device cloning, MITM rules, raw/fuzzy requests, tunneling, and
 historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 6 polling alignment refinement on `b8af8e4` plus the working tree:
+  all 14 focused polling tests and the real TUI test passed on Python 3.11
+  with adjacent ctui. Tests cover separator positions across mixed values and
+  errors, integer type bounds, full raw widths, counter/value overflow and
+  repeated headers, float precision, and existing polling/CLI/WUI behavior.
+  Changed-file Black/isort checks, pylint (10.00/10), and whitespace checks
+  passed. The full suite result below predates this display refinement;
+  unrelated transport and packaging checks were not repeated.
+
+- October 6 polling changes on `b8af8e4` plus the working tree, Python 3.11.16
+  with adjacent ctui at `216ef28`: full suite passed all 95 tests, including
+  real TUI polling and TCP/UDP/TLS/mTLS/PTY transport tests. All 12 focused
+  polling tests also passed. Coverage includes fixed cadence, skipped busy
+  ticks, count/duration,
+  ordered raw ranges/repeats, partial chunks, records, target-resolution guards,
+  immediate and in-flight cancellation, graceful stop, CLI interruption and
+  lifecycle/streaming,
+  shared layout appends, and an actual local WUI runtime.
+  The previous backend stalls disappear outside the filesystem sandbox; the
+  old TUI exit test was updated for current ctui's explicit confirmation.
+  Black, isort, pylint (10.00/10), lockfile and whitespace checks passed.
+  Dependency metadata and lockfile are unchanged. Manual sustained browser/
+  terminal and physical-device timing, remote CI, artifacts, and release
+  publication were not performed.
 
 - October 6 `tags` management rename on `759b8f7` plus the working tree:
   command-registration checks and CLI help passed with adjacent editable ctui.

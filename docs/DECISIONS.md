@@ -278,3 +278,38 @@ uncertainty. Observations reset on fresh sessions and are not persisted. MITM
 request/response seams exist, but rules and separate MITM TOML remain deferred.
 
 The detailed command/config/hook contract is in [SERVER.md](SERVER.md).
+
+## D14 — Fixed-cadence polling and appended evidence rows
+
+Accepted at the owner's request, 2026-10-06.
+
+One runtime poll belongs to each application. `poll tags` snapshots all or
+explicit ordered tags; `poll raw` accepts ordered table options and inclusive
+ranges. Keep protocol limits, response validation, project isolation, and one
+serialized connection. Reserve a whole cycle, then release between cycles so
+manual device commands can proceed. Never queue polling behind busy device work.
+
+Use a monotonic fixed cadence, starting immediately. Skip busy or obsolete ticks
+rather than overlap requests, cancel at each deadline, or accumulate catch-up
+work. Count means started cycles; duration limits cycle starts. Both limits work
+in terminal and browser sessions; CLI streams and waits for completion. Exact
+wire timing is not guaranteed by the event loop or transport.
+
+Append a header and one compact line per cycle to shared output. Preserve target
+order/repetitions and display typed tags, contiguous raw bits, and four-digit raw
+hex registers. Mark failed columns with ERR, retaining confirmed raw chunks and
+operation records. Continue after column errors while the transport is usable;
+stop on connection loss. A latest-values-only view was superseded by the owner's
+explicit preference for every row, including unchanged values.
+
+Keep stable project/tag/connection targets through preparation and execution;
+reject tag mutations during polling. `poll status` retains counters and reason
+after completion. `poll stop` drains gracefully; cancel/close/shutdown cancel
+polling and close the connection. Poll tasks and plans are runtime state only.
+
+Accepted display refinement: use `#` for the polling counter and ` | ` between
+all columns. Preallocate widths from labels, integer bounds, float precision,
+and full raw range lengths. Right-align counters/numeric tags and left-align
+booleans/raw sequences. Float32/64 use 9/17 significant digits to retain
+round-trip precision in a compact representation. Widen overflowing columns and
+repeat the header before the affected row; do not rewrite previous output.
