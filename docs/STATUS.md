@@ -1,0 +1,451 @@
+# Project status
+
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `b43c72e`, after verifying the
+complete passing GitHub Actions run. Only this status reconciliation is
+uncommitted; the branch is ready for a release-preparation PR into `main`.
+
+## Current state
+
+- The [latest CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40074562350)
+  at `b43c72e` passes all 18 jobs: all 16 OS/Python test combinations, quality
+  checks, and wheel/sdist builds and smoke tests. Windows, macOS, Linux x86-64
+  and Linux ARM64 are green across Python 3.11–3.14.
+- The test portability fixes are committed and remotely validated. Paths are
+  quoted and canonicalized, polling uses event-based/virtual-clock regressions,
+  and the TLS fixture uses IPv4 with a matching certificate IP SAN and the
+  normal three-second timeout. Runtime code and workflow skips are unchanged.
+
+- CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
+  Added/Changed/Fixed/Compatibility sections checked against current usage and
+  implementation. Package metadata, lockfile and release checklist now target
+  stable 1.0.0. Branch CI and artifact smoke tests pass; PR/main CI and manual
+  release checks remain outstanding. Neither the metadata nor dated changelog
+  establishes publication.
+- Release preparation must go through a reviewed PR from `dev-v1.0.0` into
+  `main`. No open PR for this branch/base exists at this review. Open the PR
+  with validation evidence, then verify the final `main` revision before
+  approving and pushing `v1.0.0`. The checklist records this sequence; this
+  review did not create a PR or perform a merge or publication.
+
+- README uses the owner's approved informal, concise technical style throughout.
+  The feature list distinguishes flexible reads from consecutive writes and
+  runtime status from saved project data. Development setup is consolidated;
+  separate server and proxy sections each include their own request logging
+  examples, before CLI/project usage. Detailed server configuration, address
+  maps, simulation rules, Python hooks and proxy routing are now in README;
+  the separate server guide is removed and its incoming links are updated.
+  Corrected project history export, stale polling deferral and ctui overrides.
+  PyPI still lists 0.6.0 on October 24, so installation directs readers to the
+  checkout for 1.0 features until publication.
+
+- `write holding_registers` accepts comma-separated mixed decimal and
+  `0x`/`0b`/`0o`/`0d` literals using the shared tag integer parser. Signed int16
+  values encode as two's complement, existing unsigned values remain supported,
+  and each literal occupies one register. Full-list validation precedes the
+  existing single-request write path. See [README usage](../README.md#interactive-commands)
+  and D03; optional typed address writes remain outside this change.
+
+- Async migration, TLS, project-scoped typed tags (`5eb04ee`), and USB identity
+  in serial completion (`4718ddd`) are implemented. Architecture and accepted
+  choices are in [DECISIONS.md](DECISIONS.md).
+- Version is `1.0.0`; dependencies are `ctui==1.0.0` and
+  `pymodbus[serial]>=3.15.0,<3.16` (locked to 3.15.0), Python >=3.11,<4.
+- Development and release validation now use the locked PyPI ctui distribution.
+  The temporary adjacent-checkout override has ended. `uv sync --locked`
+  replaces prior editable ctui installations in `.venv`; direct imports now
+  resolve to ctui 1.0.0 in site-packages. See the
+  [development setup](../README.md#development-and-validation) and D06.
+- Published ctui 1.0.0 fixes the earlier RC1 import incompatibility. The GitHub
+  `pypi` environment exists; PyPI trusted publisher configuration still needs
+  verification.
+- The September 21 audit updates global documentation ownership rules, expands
+  contracts throughout all 16 project Python files, and reconciles all seven
+  Markdown files. Global instructions need separate synchronization per machine.
+- Resolved and remaining tag lifecycle/concurrency discrepancies are recorded in
+  [D12](DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals).
+- Tag TOML commands are grouped with the other tag-management commands as
+  `tags export` and `tags import`; the unreleased `export tags` and `import tags`
+  spellings are not retained as aliases. Both path arguments use the shared
+  ctui path completer from the published stable dependency.
+  The management group is now `tags` (create/list/show/rename/delete/export/
+  import); dispatch guards, tests, and examples use that spelling. `write tag`
+  and server tag I/O retain their existing syntax. See D11 for the naming decision.
+
+- Server/emulator commands, all five transports, TOML and terminal definition
+  editing, typed/random/sequence rules, optional Python hooks, plain proxying,
+  and independent client/downstream evidence views are implemented locally.
+  See [README usage](../README.md#server), [D13](DECISIONS.md#d13--independent-servers-sparse-emulation-proxy-routing-and-evidence-views),
+  and the pump/tank example under `examples/`. MITM rules remain deferred.
+
+- Fixed-cadence `poll tags` and multi-table `poll raw` now run one poll per app,
+  with interval/count/duration options, retained status, and graceful stop.
+  Each cycle appends one aligned typed/raw row headed by `#`, with separators
+  between all columns and repeated headers on width expansion. Busy ticks are
+  skipped and partial reads remain recorded. CLI polling streams and waits.
+  Targets are stable and client stop/shutdown stop polling. See
+  [Polling](../README.md#polling) and [D14](DECISIONS.md#d14--fixed-cadence-polling-and-appended-evidence-rows).
+
+- Server request arrivals and proxy forwarding now append correlated UTC lines
+  by default. Every listener and `proxy start` support `--quiet`; independent
+  live `server logging` / `proxy logging` switches suppress routine lines while
+  preserving errors and operation records. Status shows logging state; write
+  previews are bounded and records retain full payloads. See
+  [request display controls](../README.md#server-request-output) and
+  [D15](DECISIONS.md#d15--independent-server-and-proxy-request-display).
+- The `aad20cd` revert removed the application-wide append default. Ordinary
+  management results now use TUI/WUI popups, while runtime request/polling
+  lines explicitly append. Read/write output and ctui built-ins retain their
+  existing presentation. See D17.
+
+- Component commands now follow client/server/proxy start/stop/status, with
+  client discover, selected client config show/set/save/load, server config/hook
+  editing, and server reset. Loading settings requires an explicit client start.
+  Stop confirmations protect active proxy routing; bare groups show example
+  help popups. Legacy aliases are removed; ctui-owned commands/fields remain
+  unchanged. Server reset retains timestamped observations. See
+  [D16](DECISIONS.md#d16--component-commands-selected-client-settings-and-strict-toml)
+  and [README usage](../README.md#projects-profiles-and-records).
+- Server/tag TOML now require exact format/version markers and reject unknown
+  nested/top-level keys. Server stays version 1 and uses `tick_interval_seconds`.
+  Existing unreleased server configs need explicit format/key updates or
+  clear/reimport. Client/proxy commands have dedicated modules; shared lifecycle
+  arbitration remains in app.py.
+
+- Owned management results now use standard scrollable ctui message dialogs
+  with descriptive titles. Actions finish first; background logging and polling
+  continue while dismissal gates new command submissions. UI output is preserved,
+  confirmations remain separate, and CLI/headless results stay plain text.
+- Every server start returns immediately; --foreground has been removed. CLI
+  executes the full sequence, then keeps a remaining listener alive on success.
+  Errors and explicit exit bypass keepalive; cancellation always cleans up both
+  endpoints. The CLI entry point handles Ctrl-C without a traceback (exit 130).
+  See [D17](DECISIONS.md#d17--management-result-popups-and-cli-server-keepalive)
+  and [result presentation](../README.md#management-result-popups).
+
+- `tags delete --all` now supports confirmed bulk deletion; NAME/--all are
+  exclusive. Saved server tag references refuse deletion unless explicitly
+  removed using --remove-server-rules. Both tables change in one transaction;
+  other config and external files are retained. Hook warnings appear before
+  approval. TUI/WUI use standard Yes/No confirmation and MessageDialog results;
+  CLI requires --confirm for bulk/rule deletion or hook warnings. Dispatch
+  reserves tag/project/server edits across preparation and approval. See
+  [tag removal](../README.md#removing-tags) and D18.
+
+## Next steps and validation gaps
+
+1. Multi-tag serialization/partial output and tag-import confirmation, atomic
+   application, and project isolation are fixed. Remaining D12 items include
+   reset integration and optional file-I/O/export improvements; adjacent-read
+   batching remains future work. These are not release feature commitments.
+   ctui enhancements listed there remain proposals, not dependency commitments.
+2. Manually exercise component overviews, option completion, client config
+   editing/loading, and proxy stop confirmation in a real terminal/browser.
+   Exercise tag completion, collision confirmation, and typed output in a real
+   terminal; verify USB metadata on physical serial ports.
+   Manually exercise sustained polling in a real terminal/browser and against
+   physical devices. Automated TUI/WUI and cadence checks pass; backend test
+   stalls were resolved by running outside the sandbox (see October 6 evidence).
+3. Open a PR from `dev-v1.0.0` into `main`, review and merge after required CI,
+   then run the [release checklist](../RELEASE_CHECKLIST.md) on the intended
+   `main` release revision. Passing branch CI below does not establish validation
+   of a future merge revision. Record actual evidence here.
+   Remove README's temporary checkout-installation note once 1.0 is published.
+4. Confirm the PyPI trusted publisher configuration and obtain release approval
+   before publication (D08).
+
+Device cloning, MITM rules, raw/fuzzy requests, tunneling, and
+historian integration remain deferred. Branch automation is green; release
+readiness still requires PR/main validation, manual checks and publisher setup.
+
+## Validation evidence
+
+- October 24 remote CI verification at `b43c72e`: GitHub Actions run 40074562350
+  completed successfully with all 18 jobs passing. Verified every Python
+  3.11–3.14 combination on Windows, macOS, Linux x86-64 and Linux ARM64, quality
+  checks and distribution build/smoke jobs. No job was skipped in this run;
+  individual tests retain their documented platform skips. The branch has no
+  open PR into `main` at review. This read-only remote review and local status
+  update did not commit, push, merge, tag or publish anything.
+
+- October 24 Windows TLS follow-up on `85f59b4` plus test changes: reviewed
+  run 40074055336, confirming 12 passing Linux/macOS jobs and the same single
+  TLS connection failure on all four Windows Python versions. Injecting 0.75s
+  localhost-resolution latency reproduces the old 0.5s fixture failure; the
+  revised IPv4 fixture passes under the same injection. No exact Windows
+  resolver/handshake root cause is established without a Windows run.
+- All 131 tests pass with no skips on Linux/Python 3.11.16; all 21 server tests
+  pass with no skips on Python 3.14.9. Black/isort, local documentation links
+  and whitespace checks pass. No runtime/dependency changes, Windows execution,
+  remote rerun of the new fix, artifact rebuild, commit or push were performed.
+
+- October 24 CI investigation on `5b3720f` plus test changes: inspected failing
+  jobs and logs from runs 40071325659 and 40067319242. Each reported failure maps
+  to the three test assumptions above; no application defect was established.
+  All 131 tests pass with no skips on Linux x86-64 with Python 3.11.16 and
+  3.14.9, using published ctui 1.0.0. All 15 focused polling tests also pass.
+- Windows backslash/space paths round-trip through the command parsers, and the
+  hook export regression passes through a symlinked temporary directory locally.
+  Server/tag suites now exercise paths containing spaces on every platform.
+  Black/isort, pylint (10.00/10), documentation links and whitespace checks pass.
+  No Windows/macOS/ARM64 execution, remote rerun of these changes, artifact
+  rebuild, commit, push or publication was performed by this investigation.
+
+- October 24 stable metadata preparation on `08de58b` plus the working tree,
+  Python 3.11.16/Linux x86-64 with published ctui 1.0.0: all 130 tests passed
+  with no skips. Black/isort, pylint (10.00/10), locked sync, lockfile and
+  whitespace checks passed. CLI help, installed app metadata, project metadata
+  and the lockfile all report ctmodbus 1.0.0. No dependency versions changed.
+- Fresh 1.0.0 wheel/sdist builds and both isolated installed-artifact smoke tests
+  passed without the editable ctui override. Inspected stable version, README,
+  GPL license and dependency metadata in both artifacts; imported ctui is the
+  published 1.0.0 distribution in site-packages. uv 0.13.5 emitted the existing
+  build-backend version warning; builds and smoke checks succeeded with the
+  declared uv_build range. Local documentation links/anchors and release
+  metadata were checked. No remote matrix CI, physical-adapter or sustained
+  manual UI checks were run; no commit, push, PR, merge, tag or publication was
+  performed by this work. Repeat release gates on the final `main` revision.
+
+- October 24 changelog preparation on `68d7aa3` plus documentation changes:
+  reconciled the release notes with README, migration guidance and implemented
+  behavior; checked local Markdown links, section/date formatting and whitespace.
+  This is a documentation-only change; no runtime tests, artifact builds,
+  remote CI or publication were performed for it.
+
+- October 24 server-guide consolidation on `96c3844` plus documentation changes:
+  all 119 fenced README command examples and inline rename/exit syntax parse
+  against installed ctui 1.0.0. All 22 server-definition commands plus four
+  remove/clear/validate checks ran successfully in a temporary project. The full
+  server TOML passes schema validation; the hook TOML references actual companion
+  functions and the Python example parses. Removed the nonexistent `on_read`
+  entry from the pump hook config example; the optional signature remains shown.
+  All 45 repository-local Markdown links/anchors, code fences and whitespace
+  checks passed. Updated guide references in instructions, decisions and status;
+  the separate guide is removed. Runtime code and dependencies are unchanged;
+  the prior full-suite result below was not rerun for this documentation move.
+
+- October 24 README/example audit on `1fda698` plus documentation changes,
+  Python 3.11.16/Linux x86-64 with published ctui 1.0.0: checked command syntax
+  for all 91 fenced command examples plus inline rename/exit examples against
+  the installed registry/parser, and executed 96 setup/workflow commands
+  in temporary projects against real local TCP endpoints. Covered raw/tag I/O,
+  import collision approval/replacement, tag deletion and saved server rules,
+  polling start/status/stop, pump/tank import/hook validation/export, actual proxy
+  forwarding, logging switches, saved profiles, history/project export and
+  project switches. Live checks substitute loopback ports, fixture unit 1 and
+  temporary paths; polling is stopped after its first cycle. Hardware and example
+  production endpoints are not contacted. CLI help and web startup defaults
+  match the documented options.
+- All 130 existing regression tests passed with no skips, including TCP/UDP,
+  TLS/mTLS, serial PTYs, terminal/browser behavior and CLI cleanup. This is
+  Linux/local evidence, not a remote matrix or physical-adapter check. Local
+  documentation checks passed for 36 local links/anchors, balanced Markdown
+  fences and whitespace. No runtime code,
+  dependency metadata or release version changed; no publication or new artifact
+  build was performed for this documentation-only work.
+
+- October 23 published ctui adoption on `9c15d08` plus the working tree,
+  Python 3.11.16/Linux x86-64: all 130 tests passed with no skips, including
+  actual TCP/UDP/TLS/mTLS/PTY transports, terminal/browser runtime, polling,
+  management dialogs, tags and lifecycle checks. No editable ctui override was
+  used; imported ctui reports 1.0.0 from site-packages with no direct URL.
+- Locked sync, Black/isort checks, pylint (10.00/10), lockfile and whitespace
+  checks passed. Wheel/sdist builds and both isolated installed-artifact smoke
+  tests passed using published dependencies; metadata in each artifact requires
+  `ctui==1.0.0`. uv 0.13.5 regenerated lock schema revision 5 and added ctui's
+  required browser dependencies; existing locked package versions other than
+  ctui are unchanged. uv emitted a build-backend version warning; both builds
+  succeeded with the existing declared uv_build range. No remote CI rerun,
+  physical-device checks, sustained manual UI checks or publication was done.
+
+- October 23 radix register writes on `5db3c8e` plus the working tree,
+  Python 3.11.16 with adjacent ctui at `755f5ac`: all 130 tests passed with no
+  skips, including tag codecs, mixed-radix/signed write dispatch and records,
+  single/multiple function selection, the 123-register/address boundary, and
+  rejection of malformed/out-of-range values before I/O. The focused command
+  suite also passed all 32 tests. The first full run exposed an incorrect records
+  API call in the new test; it was corrected before these passing runs.
+- Black/isort checks, pylint (10.00/10), lockfile and whitespace checks passed.
+  Tests and checks used the editable ctui override; sandbox cache access required
+  running uv checks outside the sandbox. Dependency metadata and lockfile are
+  unchanged. Physical devices, manual terminal/browser checks, remote CI and
+  distribution artifact checks were not run for this command-parsing change;
+  published-ctui release validation remains outstanding.
+
+- October 7 tag deletion on `f0cdb23` plus the working tree, Python 3.11.16
+  with adjacent ctui at `79579d0`: all 127 tests passed. New regressions cover
+  bulk approval/empty selection, exclusive and unknown targets, single/bulk saved
+  references, explicit rule removal, pre-approval counts/hook warnings, retained
+  unrelated configuration, approval cancellation, SQL rollback on either table,
+  changed-config rejection, in-flight edit protection, stopped server/polling
+  requirements, and actual WUI Yes/No confirmation with MessageDialog completion.
+  Existing transport, polling, popup, CLI, project and import regressions pass.
+  The adjacent ctui moved configs under project configs; README and test/smoke
+  references were reconciled with that inherited API, without modifying ctui.
+- Black/isort checks, pylint (10.00/10), lockfile, whitespace and local document
+  links passed. Wheel/sdist builds and isolated artifact smoke tests passed with
+  the adjacent ctui override. Dependency metadata and lockfile are unchanged.
+  IDE editable ctui imports and dependency compatibility were checked. Physical
+  hardware, remote platform CI and sustained manual UI checks were not performed;
+  published-ctui validation remains a release gate.
+
+
+- October 6 management popups/CLI keepalive on `ea96a46` plus the working tree,
+  Python 3.11.16 with adjacent ctui at `ec16fb1`: all 117 tests passed. New
+  coverage exercises standard TUI popup dismissal, WUI result presentation,
+  descriptive-title/owned-command scope, output preservation and live network
+  request logging while a startup popup awaits dismissal, command gating and
+  popup cancellation at shutdown. CLI regressions cover later commands before
+  keepalive, normal stop/exit, expected/unexpected errors, cancellation cleanup,
+  and a real POSIX subprocess SIGINT that exits 130 without traceback and releases
+  its listener. Existing TCP/UDP/TLS/mTLS/PTY transport, proxy, polling, record,
+  configuration and project isolation regressions pass.
+- Black/isort formatting, pylint (10.00/10), lockfile, local documentation links
+  and whitespace checks passed. Wheel/sdist builds and both isolated artifact
+  smoke tests passed with the development ctui override. Dependency metadata
+  and lockfile are unchanged. Remote platform CI, physical hardware and manual
+  sustained browser/terminal checks were not run; published-ctui validation
+  remains a release gate.
+
+
+- October 6 component refactor on `5ffde8c` plus the working tree, Python
+  3.11.16 with adjacent ctui at `ec16fb1`: all 111 tests passed. Coverage includes
+  real TCP/UDP/TLS/mTLS and PTY RTU/ASCII clients/listeners, cross-transport
+  proxying, polling, records, cancellation, project isolation, and import guards.
+  A final focused run passed all 21 server/proxy tests after adding real-endpoint
+  declined/confirmed stop checks; the other endpoint and forwarding are retained
+  on rejection. New regressions cover selected config save/load/set without I/O, explicit
+  start, atomic invalid edits, TLS clearing/verification, source/dirty state,
+  completion/unique prefixes, concurrent config/stop reservations, declined and
+  accepted stop confirmation, bare-component terminal/browser help presentation,
+  generated references, removed aliases, strict TOML markers/nested keys, and
+  retained reset evidence. Existing tests use the new command hierarchy.
+- Black/isort checks and pylint (10.00/10), lockfile and whitespace checks passed.
+  Wheel/sdist builds and both isolated artifact smoke tests passed with the
+  development ctui override. All 22 documented server assembly/export commands
+  and the example TOML import/validate/export round trip passed. Local document
+  links were checked. Restored adjacent ctui editable in the IDE .venv; direct
+  imports and dependency compatibility checks passed. Dependency metadata and
+  lockfile are unchanged. Physical hardware, sustained manual terminal/browser
+  checks, published-ctui release validation, and remote platform CI were not run.
+
+
+- October 6 proxy display follow-up: proxy request lines now use `unit=<value>`,
+  matching server lines while retaining the actual mapped upstream unit. The
+  focused proxy logging/quiet/error regression passed; README example updated.
+
+- October 6 request logging on `aad20cd` plus the working tree, Python 3.11.16
+  with adjacent ctui at `ec16fb1`: all 101 tests passed, including actual
+  TCP/UDP/TLS and PTY servers/proxying, real TUI/WUI output, and polling.
+  New checks cover default arrivals, shared server/proxy request IDs, unit
+  mapping, independent quiet/live switches, visible quiet-mode errors, UTC
+  timestamps, escaped controls, bounded previews/full recorded write payloads,
+  restart defaults, browser append preservation, and CLI stream selection.
+  Black/isort, pylint (10.00/10), lockfile and whitespace checks passed.
+  Dependency metadata is unchanged. Physical-device and sustained manual UI
+  checks, remote matrix CI, distribution artifacts, and publication were not
+  performed.
+
+- October 6 polling alignment refinement on `b8af8e4` plus the working tree:
+  all 14 focused polling tests and the real TUI test passed on Python 3.11
+  with adjacent ctui. Tests cover separator positions across mixed values and
+  errors, integer type bounds, full raw widths, counter/value overflow and
+  repeated headers, float precision, and existing polling/CLI/WUI behavior.
+  Changed-file Black/isort checks, pylint (10.00/10), and whitespace checks
+  passed. The full suite result below predates this display refinement;
+  unrelated transport and packaging checks were not repeated.
+
+- October 6 polling changes on `b8af8e4` plus the working tree, Python 3.11.16
+  with adjacent ctui at `216ef28`: full suite passed all 95 tests, including
+  real TUI polling and TCP/UDP/TLS/mTLS/PTY transport tests. All 12 focused
+  polling tests also passed. Coverage includes fixed cadence, skipped busy
+  ticks, count/duration,
+  ordered raw ranges/repeats, partial chunks, records, target-resolution guards,
+  immediate and in-flight cancellation, graceful stop, CLI interruption and
+  lifecycle/streaming,
+  shared layout appends, and an actual local WUI runtime.
+  The previous backend stalls disappear outside the filesystem sandbox; the
+  old TUI exit test was updated for current ctui's explicit confirmation.
+  Black, isort, pylint (10.00/10), lockfile and whitespace checks passed.
+  Dependency metadata and lockfile are unchanged. Manual sustained browser/
+  terminal and physical-device timing, remote CI, artifacts, and release
+  publication were not performed.
+
+- October 6 `tags` management rename on `759b8f7` plus the working tree:
+  command-registration checks and CLI help passed with adjacent editable ctui.
+  Four codec tests passed; the focused tag suite then stalled at its first
+  backend-dependent test and was interrupted, consistent with the existing
+  validation blocker. Black and isort checks of changed Python files passed
+  through their synchronous APIs; whitespace checks passed. Full dispatch,
+  import-guard and server regressions still need a completed test run.
+
+- October 5 development environment repair on `4cb75fd`: installed adjacent
+  ctui at `4833e58` editable into the project `.venv`, including its new aiohttp
+  dependency. Direct Python imports resolve ctui to the adjacent source tree;
+  `ctmodbus.app` imports, CLI `--help`, and `uv pip check` passed. The full
+  unittest run stalled on its first test, `test_all_transport_commands`, and
+  was interrupted; no suite success is claimed. Dependency metadata and
+  lockfile remain unchanged. README now documents the direct editable install
+  and development run overrides.
+
+- October 3 server/emulator and proxy changes on `2c9afc7` plus the working tree:
+  all 83 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
+  New regressions cover sparse maps, address 65535, typed/partial sequences,
+  random seeds, timed rules, hook rollback and ticks, import confirmation,
+  lifecycle guards, actual TCP/UDP/TLS/mTLS and PTY RTU/ASCII listeners,
+  cross-transport proxying and unit mapping, faithful exceptions, separate
+  evidence views, pipelined transaction IDs, invalid counts and bind failures.
+  CLI import/validate/export of `examples/device.toml` passed. Black, isort,
+  pylint (10.00/10), lockfile and whitespace checks passed; wheel and sdist
+  builds and isolated wheel/sdist smoke checks passed with the same ctui
+  override. All 21 documented CTUI assembly/export commands also passed.
+  Dependency metadata is unchanged. Physical hardware, remote
+  CI/platform checks and publication were not performed.
+
+- October 2 prepared tag-import changes on `920daa0` plus the working-tree diff:
+  all 66 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
+  Regressions cover changed files during confirmation, project/tag guards,
+  in-flight edits, cancellation before application, and all-row SQL rollback.
+  Black, isort, pylint (10.00/10), lockfile and whitespace checks passed; wheel
+  and sdist builds passed. Dependency metadata remains unchanged. Physical
+  serial hardware and remote platform CI were not checked.
+
+- October 2 multi-tag read changes on `6fd5c21` plus the working-tree diff:
+  all 61 tests passed on Python 3.11.16 with adjacent ctui main at `fdda194`.
+  Added regressions for whole-command serialization, partial failure,
+  cancellation, ordering/duplicates, and validation before I/O. Updated the
+  existing responsive-help test to request ctui's grouped `help read` page.
+  Black, isort, pylint (10.00/10), lockfile and whitespace checks passed.
+  Local TCP/UDP, PTY serial, TLS, and terminal tests ran; physical hardware and
+  remote platform CI were not checked. Dependency metadata remains unchanged.
+
+- Historical September 13 migration through `7914437`: 34 tests reported passing
+  on Python 3.11 and 3.14, local TCP/UDP and PTY serial, quality/lock checks,
+  wheel/sdist builds, and isolated installed-artifact smoke checks.
+- Historical TLS/workflow follow-up through `426048a`: prior session reported
+  45 passing tests, quality/lock/build/workflow checks, and both artifact smoke
+  tests. These supersede the initial test count, not the manual/remote gates.
+- September 20 tag work based on `4e34098`: full suite reported 53 passing tests
+  on Python 3.11 and passing quality/build/artifact checks before final follow-ups.
+  Later singular syntax/read-all/signed-value updates had 10 focused tag tests.
+  Do not treat the earlier full-suite/artifact checks as tests of final `5eb04ee`.
+- September 20 serial completion based on `5eb04ee`, committed at `4718ddd`:
+  30 discovery/command tests and formatting/import/lint/whitespace checks passed.
+- September 21 documentation audit on `4718ddd`: Python syntax and docstring
+  coverage checked; non-docstring ASTs match HEAD in all 16 Python files.
+  Black, isort, pylint (10.00/10), and whitespace checks passed.
+  All 40 focused command/tag/discovery tests passed; local Markdown links and
+  anchors checked. Full transport/matrix and artifact checks were not rerun for
+  this documentation-only change.
+- September 21 tag command rename and shared path-completer integration on
+  `cf3fb59`: all 11 focused tag tests passed on Python 3.11 using the adjacent
+  editable ctui checkout.
+
+## Audit source coverage
+
+Reviewed the three locally available ctmodbus Codex session files (including
+overlapping replayed history), current source/tests, all seven project Markdown
+files, and relevant Git history. Earlier September 13/18 evidence is retained
+from Git-tracked notes rather than claimed as newly rerun validation. Histories
+only on other machines or unavailable account sessions were not accessible.
+No additional project Markdown stash was found in the repository beyond those files;
+private transcripts and machine-specific logs are not copied into this repository.
