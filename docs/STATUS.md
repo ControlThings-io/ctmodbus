@@ -1,8 +1,8 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `1fda698`, with an uncommitted
-README rewrite and example audit. Published stable `ctui==1.0.0` is committed
-at `1fda698`; local documentation and regression checks below pass.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `96c3844`, with an uncommitted
+merge of the server guide into README. The prior README/example audit is
+committed at `96c3844`; validation for this consolidation is recorded below.
 
 ## Current state
 
@@ -10,8 +10,10 @@ at `1fda698`; local documentation and regression checks below pass.
   The feature list distinguishes flexible reads from consecutive writes and
   runtime status from saved project data. Development setup is consolidated;
   separate server and proxy sections each include their own request logging
-  examples, before CLI/project usage. Corrected project history
-  export, stale polling deferral, and the linked server guide's ctui override.
+  examples, before CLI/project usage. Detailed server configuration, address
+  maps, simulation rules, Python hooks and proxy routing are now in README;
+  the separate server guide is removed and its incoming links are updated.
+  Corrected project history export, stale polling deferral and ctui overrides.
   PyPI still lists 0.6.0 on October 24, so installation directs readers to the
   checkout for 1.0 features until publication.
 
@@ -56,7 +58,7 @@ at `1fda698`; local documentation and regression checks below pass.
 - Server/emulator commands, all five transports, TOML and terminal definition
   editing, typed/random/sequence rules, optional Python hooks, plain proxying,
   and independent client/downstream evidence views are implemented locally.
-  See [SERVER.md](SERVER.md), [D13](DECISIONS.md#d13--independent-servers-sparse-emulation-proxy-routing-and-evidence-views),
+  See [README usage](../README.md#server), [D13](DECISIONS.md#d13--independent-servers-sparse-emulation-proxy-routing-and-evidence-views),
   and the pump/tank example under `examples/`. MITM rules remain deferred.
 
 - Fixed-cadence `poll tags` and multi-table `poll raw` now run one poll per app,
@@ -72,7 +74,7 @@ at `1fda698`; local documentation and regression checks below pass.
   live `server logging` / `proxy logging` switches suppress routine lines while
   preserving errors and operation records. Status shows logging state; write
   previews are bounded and records retain full payloads. See
-  [request display controls](SERVER.md#request-display-controls) and
+  [request display controls](../README.md#server-request-output) and
   [D15](DECISIONS.md#d15--independent-server-and-proxy-request-display).
 - The `aad20cd` revert removed the application-wide append default. Ordinary
   management results now use TUI/WUI popups, while runtime request/polling
@@ -141,6 +143,18 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 24 server-guide consolidation on `96c3844` plus documentation changes:
+  all 119 fenced README command examples and inline rename/exit syntax parse
+  against installed ctui 1.0.0. All 22 server-definition commands plus four
+  remove/clear/validate checks ran successfully in a temporary project. The full
+  server TOML passes schema validation; the hook TOML references actual companion
+  functions and the Python example parses. Removed the nonexistent `on_read`
+  entry from the pump hook config example; the optional signature remains shown.
+  All 45 repository-local Markdown links/anchors, code fences and whitespace
+  checks passed. Updated guide references in instructions, decisions and status;
+  the separate guide is removed. Runtime code and dependencies are unchanged;
+  the prior full-suite result below was not rerun for this documentation move.
 
 - October 24 README/example audit on `1fda698` plus documentation changes,
   Python 3.11.16/Linux x86-64 with published ctui 1.0.0: checked command syntax

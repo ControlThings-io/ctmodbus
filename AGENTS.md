@@ -77,7 +77,7 @@ Publishing requires release approval; pushing a version tag triggers publication
 - `src/ctmodbus/server.py`: owned listeners, request routing and plain proxying.
 - `src/ctmodbus/server_commands.py`: CTUI configuration and server lifecycle.
 - `src/ctmodbus/data_state.py`: runtime read/write evidence views.
-- [docs/SERVER.md](docs/SERVER.md): server, proxy, configuration and hook contracts.
+- [README.md](README.md#server): server configuration, hooks and proxy usage.
 - `tests/`: unittest coverage, local server fixture, distribution smoke test.
 - `.github/workflows/`: platform tests and tag-triggered publishing.
 - [MIGRATION.md](MIGRATION.md), [CHANGELOG.md](CHANGELOG.md), and the release

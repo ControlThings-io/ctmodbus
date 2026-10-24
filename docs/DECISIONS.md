@@ -292,7 +292,8 @@ presented observations, distinguishing read evidence, write acknowledgement and
 uncertainty. Observations reset on fresh sessions and are not persisted. MITM
 request/response seams exist, but rules and separate MITM TOML remain deferred.
 
-The detailed command/config/hook contract is in [SERVER.md](SERVER.md).
+Server configuration, hooks and proxy usage are documented in
+[README.md](../README.md#server).
 
 ## D14 — Fixed-cadence polling and appended evidence rows
 
