@@ -1,35 +1,31 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `85f59b4`, with an uncommitted
-Windows TLS-fixture fix. Prior path/cadence fixes pass remote Linux/macOS jobs;
-the remaining TLS adjustment passes local checks below.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `b43c72e`, after verifying the
+complete passing GitHub Actions run. Only this status reconciliation is
+uncommitted; the branch is ready for a release-preparation PR into `main`.
 
 ## Current state
 
-- The [latest CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40074055336)
-  at `85f59b4` passes all 12 Linux/macOS platform/Python jobs and quality checks.
-  All four Windows jobs now fail only the first connection in
-  `test_native_tls_and_client_certificate_requirement`; prior path, symlink and
-  polling fixes pass. Artifact jobs remain skipped because Windows tests fail.
-- The TLS fixture connected to `localhost` with a 0.5-second timeout while the
-  listener bound IPv4. Logs show a timeout-compatible empty connection error;
-  resolver/address-family latency is suspected, not proven on Windows. A local
-  controlled resolver delay reproduces the same failure. The fixture now uses
-  IPv4 directly, a matching certificate IP SAN and the normal three-second
-  timeout, with certificate verification enabled. Runtime code and workflow
-  skips are unchanged; Windows verification awaits submission.
+- The [latest CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40074562350)
+  at `b43c72e` passes all 18 jobs: all 16 OS/Python test combinations, quality
+  checks, and wheel/sdist builds and smoke tests. Windows, macOS, Linux x86-64
+  and Linux ARM64 are green across Python 3.11–3.14.
+- The test portability fixes are committed and remotely validated. Paths are
+  quoted and canonicalized, polling uses event-based/virtual-clock regressions,
+  and the TLS fixture uses IPv4 with a matching certificate IP SAN and the
+  normal three-second timeout. Runtime code and workflow skips are unchanged.
 
 - CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
   Added/Changed/Fixed/Compatibility sections checked against current usage and
   implementation. Package metadata, lockfile and release checklist now target
-  stable 1.0.0. Local checks and artifact smoke tests pass; PR/main CI and manual
+  stable 1.0.0. Branch CI and artifact smoke tests pass; PR/main CI and manual
   release checks remain outstanding. Neither the metadata nor dated changelog
   establishes publication.
 - Release preparation must go through a reviewed PR from `dev-v1.0.0` into
-  `main`. Commit/push the remaining TLS test fix when authorized, open the PR with
-  validation evidence, then verify the final `main` revision before approving
-  and pushing `v1.0.0`. The checklist records this sequence; no PR or merge has
-  been performed during local release preparation.
+  `main`. No open PR for this branch/base exists at this review. Open the PR
+  with validation evidence, then verify the final `main` revision before
+  approving and pushing `v1.0.0`. The checklist records this sequence; this
+  review did not create a PR or perform a merge or publication.
 
 - README uses the owner's approved informal, concise technical style throughout.
   The feature list distinguishes flexible reads from consecutive writes and
@@ -59,9 +55,8 @@ the remaining TLS adjustment passes local checks below.
   replaces prior editable ctui installations in `.venv`; direct imports now
   resolve to ctui 1.0.0 in site-packages. See the
   [development setup](../README.md#development-and-validation) and D06.
-- Published ctui 1.0.0 fixes the earlier RC1 import incompatibility. The current
-  remote failures are the test assumptions described above. The GitHub `pypi`
-  environment exists; PyPI trusted publisher configuration still needs
+- Published ctui 1.0.0 fixes the earlier RC1 import incompatibility. The GitHub
+  `pypi` environment exists; PyPI trusted publisher configuration still needs
   verification.
 - The September 21 audit updates global documentation ownership rules, expands
   contracts throughout all 16 project Python files, and reconciles all seven
@@ -150,20 +145,27 @@ the remaining TLS adjustment passes local checks below.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Commit/push the TLS test fix when authorized and open a PR from
-   `dev-v1.0.0` into `main`. Require the full platform/Python matrix, review and
-   merge the PR, then run the [release checklist](../RELEASE_CHECKLIST.md) on
-   the intended `main` release revision. Local branch results below do not
-   establish final-main or remote validation. Record actual evidence here.
+3. Open a PR from `dev-v1.0.0` into `main`, review and merge after required CI,
+   then run the [release checklist](../RELEASE_CHECKLIST.md) on the intended
+   `main` release revision. Passing branch CI below does not establish validation
+   of a future merge revision. Record actual evidence here.
    Remove README's temporary checkout-installation note once 1.0 is published.
 4. Confirm the PyPI trusted publisher configuration and obtain release approval
    before publication (D08).
 
 Device cloning, MITM rules, raw/fuzzy requests, tunneling, and
-historian integration remain deferred. Release readiness requires a green
-remote matrix on the corrected revision, final-main validation and manual checks.
+historian integration remain deferred. Branch automation is green; release
+readiness still requires PR/main validation, manual checks and publisher setup.
 
 ## Validation evidence
+
+- October 24 remote CI verification at `b43c72e`: GitHub Actions run 40074562350
+  completed successfully with all 18 jobs passing. Verified every Python
+  3.11–3.14 combination on Windows, macOS, Linux x86-64 and Linux ARM64, quality
+  checks and distribution build/smoke jobs. No job was skipped in this run;
+  individual tests retain their documented platform skips. The branch has no
+  open PR into `main` at review. This read-only remote review and local status
+  update did not commit, push, merge, tag or publish anything.
 
 - October 24 Windows TLS follow-up on `85f59b4` plus test changes: reviewed
   run 40074055336, confirming 12 passing Linux/macOS jobs and the same single
