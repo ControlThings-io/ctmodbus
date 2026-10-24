@@ -149,6 +149,11 @@ Owner update, 2026-09-18: ctmodbus RC1 is not published; feature development is
 still ongoing. Release validation follows that work. The specific remaining
 features have not been listed, so do not invent commitments from deferred ideas.
 
+Accepted update, 2026-10-24: prepare stable ctmodbus 1.0.0 as the next release,
+superseding the earlier RC-first target. The changelog is dated October 24 at
+the owner's request. Stable ctui adoption is recorded in D06; package metadata,
+release gates and publication approval remain separate release steps.
+
 ## D09 — Migration commit history
 
 Accepted, 2026-09-13.

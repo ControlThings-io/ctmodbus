@@ -1,10 +1,16 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `96c3844`, with an uncommitted
-merge of the server guide into README. The prior README/example audit is
-committed at `96c3844`; validation for this consolidation is recorded below.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `68d7aa3`, with an uncommitted
+1.0.0 changelog update dated October 24. The README and server-guide
+consolidation are committed; validation for the changelog is recorded below.
 
 ## Current state
+
+- CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
+  Added/Changed/Fixed/Compatibility sections checked against current usage and
+  implementation. Package metadata and the release checklist still target RC1;
+  updating them and running final release gates remain next steps. The dated
+  changelog does not establish publication.
 
 - README uses the owner's approved informal, concise technical style throughout.
   The feature list distinguishes flexible reads from consecutive writes and
@@ -35,7 +41,7 @@ committed at `96c3844`; validation for this consolidation is recorded below.
   resolve to ctui 1.0.0 in site-packages. See the
   [development setup](../README.md#development-and-validation) and D06.
 - October 23 release review confirmed ctui 1.0.0 on PyPI; ctmodbus remains
-  unpublished at 1.0 and CHANGELOG remains Unreleased. Existing
+  unpublished at 1.0 at that review. Existing
   [CI at 9c15d08](https://github.com/ControlThings-io/ctmodbus/actions/runs/40051287256)
   failed because the old ctui RC1 dependency lacks newer imports. The updated
   dependency passes local tests/lint; remote CI after the dependency update
@@ -129,8 +135,9 @@ committed at `96c3844`; validation for this consolidation is recorded below.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Prepare ctmodbus stable version metadata, changelog and release documentation;
-   the ctui dependency and lockfile now use published stable 1.0.0. Run the
+3. Update ctmodbus stable version metadata, lockfile and release checklist;
+   the 1.0.0 changelog is dated October 24 and the ctui dependency already uses
+   published stable 1.0.0. Run the
    [release checklist](../RELEASE_CHECKLIST.md) on the intended release revision,
    including the full remote platform matrix, artifacts, terminal/browser
    checks, and physical RTU/ASCII devices. Record actual evidence here.
@@ -143,6 +150,12 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 24 changelog preparation on `68d7aa3` plus documentation changes:
+  reconciled the release notes with README, migration guidance and implemented
+  behavior; checked local Markdown links, section/date formatting and whitespace.
+  This is a documentation-only change; no runtime tests, artifact builds,
+  remote CI or publication were performed for it.
 
 - October 24 server-guide consolidation on `96c3844` plus documentation changes:
   all 119 fenced README command examples and inline rename/exit syntax parse
