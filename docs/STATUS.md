@@ -1,13 +1,15 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `b43c72e`, after verifying the
-complete passing GitHub Actions run. Only this status reconciliation is
-uncommitted; the branch is ready for a release-preparation PR into `main`.
+Last reconciled: 2026-10-24, `main` at `f3570af`, after PR #6 merged and all
+18 main CI jobs passed. Local main is synced; only this status reconciliation
+is uncommitted. Manual release checks and publisher verification remain.
 
 ## Current state
 
-- The [latest CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40074562350)
-  at `b43c72e` passes all 18 jobs: all 16 OS/Python test combinations, quality
+- [PR #6](https://github.com/ControlThings-io/ctmodbus/pull/6) merged release
+  preparation from `dev-v1.0.0` into `main` at `f3570af`. The
+  [main CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40076679806)
+  passes all 18 jobs: all 16 OS/Python test combinations, quality
   checks, and wheel/sdist builds and smoke tests. Windows, macOS, Linux x86-64
   and Linux ARM64 are green across Python 3.11–3.14.
 - The test portability fixes are committed and remotely validated. Paths are
@@ -18,14 +20,13 @@ uncommitted; the branch is ready for a release-preparation PR into `main`.
 - CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
   Added/Changed/Fixed/Compatibility sections checked against current usage and
   implementation. Package metadata, lockfile and release checklist now target
-  stable 1.0.0. Branch CI and artifact smoke tests pass; PR/main CI and manual
-  release checks remain outstanding. Neither the metadata nor dated changelog
+  stable 1.0.0. Merged-main CI and artifact smoke tests pass; manual release
+  checks and publisher verification remain. Neither metadata nor dated changelog
   establishes publication.
-- Release preparation must go through a reviewed PR from `dev-v1.0.0` into
-  `main`. No open PR for this branch/base exists at this review. Open the PR
-  with validation evidence, then verify the final `main` revision before
-  approving and pushing `v1.0.0`. The checklist records this sequence; this
-  review did not create a PR or perform a merge or publication.
+- The PR/main validation gate is complete at `f3570af`. Confirm manual checks
+  and trusted-publisher setup, then obtain approval before creating/pushing
+  `v1.0.0` on the validated main revision. No tag or publication was performed
+  by this verification.
 
 - README uses the owner's approved informal, concise technical style throughout.
   The feature list distinguishes flexible reads from consecutive writes and
@@ -145,19 +146,26 @@ uncommitted; the branch is ready for a release-preparation PR into `main`.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Open a PR from `dev-v1.0.0` into `main`, review and merge after required CI,
-   then run the [release checklist](../RELEASE_CHECKLIST.md) on the intended
-   `main` release revision. Passing branch CI below does not establish validation
-   of a future merge revision. Record actual evidence here.
+3. Complete the remaining [release checklist](../RELEASE_CHECKLIST.md) items;
+   PR #6 and merged-main automated validation are complete at `f3570af`.
+   Revalidate any later release changes and record actual evidence here.
    Remove README's temporary checkout-installation note once 1.0 is published.
 4. Confirm the PyPI trusted publisher configuration and obtain release approval
    before publication (D08).
 
 Device cloning, MITM rules, raw/fuzzy requests, tunneling, and
-historian integration remain deferred. Branch automation is green; release
-readiness still requires PR/main validation, manual checks and publisher setup.
+historian integration remain deferred. Merged-main automation is green; release
+readiness still requires manual checks, publisher verification and approval.
 
 ## Validation evidence
+
+- October 24 merged-main verification at `f3570af`: PR #6 is merged and run
+  40076679806 passed all 18 jobs, including all 16 OS/Python combinations,
+  quality checks and wheel/sdist builds and smoke tests. Verified stable package,
+  lockfile and changelog metadata; the merged tree matches the release branch.
+  Fetched origin/main and fast-forwarded the clean local main checkout to the
+  merge revision. Local documentation links and whitespace checks passed.
+  This verification did not create/push a release tag or publish a package.
 
 - October 24 remote CI verification at `b43c72e`: GitHub Actions run 40074562350
   completed successfully with all 18 jobs passing. Verified every Python
