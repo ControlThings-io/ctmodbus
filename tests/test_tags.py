@@ -1,6 +1,7 @@
 """Typed tag persistence, conversion, I/O, and interchange tests."""
 
 import asyncio
+import shlex
 import sqlite3
 import tempfile
 import unittest
@@ -89,7 +90,7 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         """Open a fresh temporary project and inject a deterministic fake client."""
-        self.directory = tempfile.TemporaryDirectory()
+        self.directory = tempfile.TemporaryDirectory(prefix="ctmodbus tags ")
         self.client = FakeClient()
         self.app = ModbusApp(
             data_dir=self.directory.name, client_factory=lambda settings: self.client
@@ -292,16 +293,16 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
         """Round-trip TOML and verify collision rejection, declined prompts, and replace."""
         await self.app.dispatch("tags create timer holding_register 2 int32")
         path = Path(self.directory.name) / "my_tags"
-        result = await self.app.dispatch(f"tags export {path}")
+        result = await self.app.dispatch(f"tags export {shlex.quote(str(path))}")
         exported = path.with_suffix(".toml")
         self.assertTrue(exported.is_file())
         self.assertIn('word_order = "little"', exported.read_text(encoding="utf-8"))
         await self.app.dispatch("tags delete timer")
-        await self.app.dispatch(f"tags import {exported}")
+        await self.app.dispatch(f"tags import {shlex.quote(str(exported))}")
         self.assertEqual((await self.app.tags.get("timer")).count, 2)
 
         with self.assertRaisesRegex(ConfirmationRequired, "timer"):
-            await self.app.dispatch(f"tags import {exported}")
+            await self.app.dispatch(f"tags import {shlex.quote(str(exported))}")
         messages = []
 
         async def decline(message):
@@ -310,11 +311,13 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             return False
 
         result = await self.app.dispatch(
-            f"tags import {exported}", confirm_callback=decline
+            f"tags import {shlex.quote(str(exported))}", confirm_callback=decline
         )
         self.assertFalse(result.accepted)
         self.assertIn("--replace", messages[0])
-        result = await self.app.dispatch(f"tags import {exported} --replace")
+        result = await self.app.dispatch(
+            f"tags import {shlex.quote(str(exported))} --replace"
+        )
         self.assertIn("Imported 1 tags", result.output)
 
     async def test_import_uses_confirmed_data_and_guards_project(self):
@@ -341,7 +344,9 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             await self.app.dispatch("help tags import")
             return True
 
-        await self.app.dispatch(f"tags imp {path}", confirm_callback=approve)
+        await self.app.dispatch(
+            f"tags imp {shlex.quote(str(path))}", confirm_callback=approve
+        )
         self.assertEqual((await self.app.tags.get("timer")).address, 9)
         self.assertEqual(await self.app.tags.names(), {"timer"})
         self.assertIsNone(self.app._tag_import_task)
@@ -388,7 +393,9 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.Event().wait()
 
         task = asyncio.create_task(
-            self.app.dispatch(f"tags import {path}", confirm_callback=approve)
+            self.app.dispatch(
+                f"tags import {shlex.quote(str(path))}", confirm_callback=approve
+            )
         )
         await asyncio.wait_for(started.wait(), 1)
         task.cancel()
@@ -450,5 +457,5 @@ class TagCommandTests(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8",
         )
         with self.assertRaisesRegex(CommandError, "Invalid tag 'bad'"):
-            await self.app.dispatch(f"tags import {path}")
+            await self.app.dispatch(f"tags import {shlex.quote(str(path))}")
         self.assertEqual(await self.app.tags.list(), [])

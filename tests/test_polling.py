@@ -86,24 +86,25 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
         await self.finish()
         self.assertIn("# | z | a | z\n1 | True | 1 | True", unpad(self.app.output_text))
 
-    async def test_fixed_cadence_skips_inflight_and_manual_work(self):
-        """A slow response skips ticks without overlapping or adding response delay."""
-        starts = []
-        original = self.client.read_coils
+    async def test_skips_inflight_and_manual_work(self):
+        """Busy ticks never queue behind a gated response or a manual operation."""
+        self.client.gate = asyncio.Event()
+        await self.app.dispatch("poll raw --coils 0 --interval 0.01 --count 3")
+        await asyncio.wait_for(self.client.started.wait(), 1)
 
-        async def delayed(**kwargs):
-            starts.append(asyncio.get_running_loop().time())
-            if len(starts) == 1:
-                await asyncio.sleep(0.14)
-            return await original(**kwargs)
+        async def skipped_ticks():
+            """Wait for skipped ticks without asserting exact wall-clock timing."""
+            while self.app.poller.skipped < 2:
+                await asyncio.sleep(0.001)
 
-        self.client.read_coils = delayed
-        await self.app.dispatch("poll raw --coils 0 --interval 0.05 --count 3")
+        await asyncio.wait_for(skipped_ticks(), 3)
+        self.assertEqual(self.app.poller.started, 1)
+        self.assertEqual(len(self.client.calls), 1)
+        self.client.gate.set()
         await self.finish()
         self.assertGreaterEqual(self.app.poller.skipped, 2)
-        self.assertLess(starts[1] - starts[0], 0.19)
-        self.assertGreater(starts[1] - starts[0], 0.13)
         self.assertEqual(self.app.poller.completed, 3)
+        self.assertEqual(self.client.peak, 1)
         async with self.app.connection.operation():
             await self.app.dispatch(
                 "poll raw --coils 0 --interval 0.01 --duration 0.04"
@@ -328,6 +329,68 @@ class PollingTests(unittest.IsolatedAsyncioTestCase):
         self.app._poll_stdout = None
         self.assertFalse(self.app.poller.active)
         self.assertFalse(self.client.connected)
+
+
+class PollScheduleTests(unittest.IsolatedAsyncioTestCase):
+    """Check timer deadlines independently of filesystem and runner latency."""
+
+    async def test_fixed_cadence_after_slow_response(self):
+        """A 1.4-second response skips tick 1 and resumes at ticks 2 and 3."""
+        from ctui import IntegerSpan
+
+        from ctmodbus.polling import Poll, PollColumn
+
+        clock = SimpleNamespace(now=0.0)
+        clock.time = lambda: clock.now
+        release = asyncio.Event()
+        starts = []
+        connection = SimpleNamespace(connected=True, generation=1, lock=asyncio.Lock())
+        app = SimpleNamespace(
+            connection=connection, append_output=lambda _text: None, _poll_stdout=None
+        )
+        poll = Poll(app)
+
+        async def cycle(_number):
+            """Hold the operation reservation until the first response is ready."""
+            async with connection.lock:
+                starts.append(clock.now)
+                if len(starts) == 1:
+                    await release.wait()
+                poll.completed += 1
+
+        async def wait_tick(waiter, delay):
+            """Advance a virtual timer, delivering the response between deadlines."""
+            waiter.close()
+            deadline = clock.now + delay
+            if not release.is_set() and deadline >= 1.4:
+                clock.now = 1.4
+                release.set()
+                await asyncio.sleep(0)
+            clock.now = deadline
+            raise TimeoutError
+
+        timing = SimpleNamespace(
+            get_running_loop=lambda: clock,
+            wait_for=wait_tick,
+            Event=asyncio.Event,
+            create_task=asyncio.create_task,
+            sleep=asyncio.sleep,
+            gather=asyncio.gather,
+            CancelledError=asyncio.CancelledError,
+        )
+        poll.read_cycle = cycle
+        with patch("ctmodbus.polling.asyncio", timing):
+            await poll.start(
+                [PollColumn("coils:0", "coils", (IntegerSpan(0, 1),))],
+                interval=1,
+                count=3,
+                duration=None,
+            )
+            await asyncio.wait_for(poll.task, 3)
+        self.assertEqual(starts, [0.0, 2.0, 3.0])
+        self.assertEqual(poll.completed, 3)
+        self.assertEqual(poll.skipped, 1)
+        self.assertEqual(poll.reason, "Count limit reached")
 
 
 class PollTableTests(unittest.TestCase):

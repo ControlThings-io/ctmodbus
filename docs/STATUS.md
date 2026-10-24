@@ -1,10 +1,22 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `08de58b`, with uncommitted stable
-1.0.0 package/lockfile and release-checklist changes. The dated changelog and
-README are committed; local stable-version release checks below pass.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `5b3720f`, with uncommitted CI
+regression-test fixes. Stable metadata, release documentation and changelog are
+committed and pushed; the corrected tests pass locally on Python 3.11 and 3.14.
 
 ## Current state
+
+- The [release-preparation CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40071325659)
+  at `5b3720f` failed 14 of 16 platform/Python test jobs. The recurring causes
+  are a polling test's strict real-time upper bound, unquoted Windows paths in
+  tag/server test commands, and a macOS hook-path assertion comparing resolved
+  and symlinked paths. Quality checks passed; artifact jobs were skipped because
+  tests failed. The preceding stable-ctui run showed the same failure patterns.
+- Test fixes quote file paths with the framework's shell-like syntax, use
+  temporary directories containing spaces, and compare the canonical hook path.
+  Polling now has separate gated-I/O/lock checks and a virtual-clock cadence
+  regression instead of an exact real-time deadline. No runtime code or workflow
+  skips changed. Local results below pass; remote verification awaits submission.
 
 - CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
   Added/Changed/Fixed/Compatibility sections checked against current usage and
@@ -13,7 +25,7 @@ README are committed; local stable-version release checks below pass.
   release checks remain outstanding. Neither the metadata nor dated changelog
   establishes publication.
 - Release preparation must go through a reviewed PR from `dev-v1.0.0` into
-  `main`. Commit/push the remaining changes when authorized, open the PR with
+  `main`. Commit/push the CI test fixes when authorized, open the PR with
   validation evidence, then verify the final `main` revision before approving
   and pushing `v1.0.0`. The checklist records this sequence; no PR or merge has
   been performed during local release preparation.
@@ -46,14 +58,10 @@ README are committed; local stable-version release checks below pass.
   replaces prior editable ctui installations in `.venv`; direct imports now
   resolve to ctui 1.0.0 in site-packages. See the
   [development setup](../README.md#development-and-validation) and D06.
-- October 23 release review confirmed ctui 1.0.0 on PyPI; ctmodbus remains
-  unpublished at 1.0 at that review. Existing
-  [CI at 9c15d08](https://github.com/ControlThings-io/ctmodbus/actions/runs/40051287256)
-  failed because the old ctui RC1 dependency lacks newer imports. The updated
-  dependency passes local tests/lint; remote CI after the dependency update
-  has not been reviewed here.
-  The GitHub `pypi` environment exists; PyPI trusted publisher configuration
-  still needs verification.
+- Published ctui 1.0.0 fixes the earlier RC1 import incompatibility. The current
+  remote failures are the test assumptions described above. The GitHub `pypi`
+  environment exists; PyPI trusted publisher configuration still needs
+  verification.
 - The September 21 audit updates global documentation ownership rules, expands
   contracts throughout all 16 project Python files, and reconciles all seven
   Markdown files. Global instructions need separate synchronization per machine.
@@ -141,7 +149,7 @@ README are committed; local stable-version release checks below pass.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Commit/push release preparation when authorized and open a PR from
+3. Commit/push the CI test fixes when authorized and open a PR from
    `dev-v1.0.0` into `main`. Require the full platform/Python matrix, review and
    merge the PR, then run the [release checklist](../RELEASE_CHECKLIST.md) on
    the intended `main` release revision. Local branch results below do not
@@ -151,10 +159,22 @@ README are committed; local stable-version release checks below pass.
    before publication (D08).
 
 Device cloning, MITM rules, raw/fuzzy requests, tunneling, and
-historian integration remain deferred. No implementation blocker is established;
-release readiness lacks final-revision and manual/remote validation.
+historian integration remain deferred. Release readiness requires a green
+remote matrix on the corrected revision, final-main validation and manual checks.
 
 ## Validation evidence
+
+- October 24 CI investigation on `5b3720f` plus test changes: inspected failing
+  jobs and logs from runs 40071325659 and 40067319242. Each reported failure maps
+  to the three test assumptions above; no application defect was established.
+  All 131 tests pass with no skips on Linux x86-64 with Python 3.11.16 and
+  3.14.9, using published ctui 1.0.0. All 15 focused polling tests also pass.
+- Windows backslash/space paths round-trip through the command parsers, and the
+  hook export regression passes through a symlinked temporary directory locally.
+  Server/tag suites now exercise paths containing spaces on every platform.
+  Black/isort, pylint (10.00/10), documentation links and whitespace checks pass.
+  No Windows/macOS/ARM64 execution, remote rerun of these changes, artifact
+  rebuild, commit, push or publication was performed by this investigation.
 
 - October 24 stable metadata preparation on `08de58b` plus the working tree,
   Python 3.11.16/Linux x86-64 with published ctui 1.0.0: all 130 tests passed

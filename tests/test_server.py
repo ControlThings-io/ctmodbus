@@ -3,6 +3,7 @@
 import asyncio
 import copy
 import os
+import shlex
 import shutil
 import socket
 import ssl
@@ -195,7 +196,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
     """Use actual TCP/UDP clients and upstream servers; no external network traffic."""
 
     async def asyncSetUp(self):
-        self.folder = tempfile.TemporaryDirectory()
+        self.folder = tempfile.TemporaryDirectory(prefix="ctmodbus server ")
         self.app = ModbusApp(data_dir=self.folder.name)
         await self.app.backend.open()
         self.clients = []
@@ -252,16 +253,16 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         ):
             await self.app.dispatch(text)
         path = Path(self.folder.name) / "device.toml"
-        await self.app.dispatch(f"server config export {path}")
+        await self.app.dispatch(f"server config export {shlex.quote(str(path))}")
         original = await self.app.server_definition()
         await self.app.dispatch("server config clear --confirm")
-        await self.app.dispatch(f"server config import {path}")
+        await self.app.dispatch(f"server config import {shlex.quote(str(path))}")
         self.assertEqual(await self.app.server_definition(), original)
         changed = copy.deepcopy(original)
         changed["tags"]["level"]["address"] = 20
         path.write_text(dumps(changed))
         with self.assertRaises(ConfirmationRequired):
-            await self.app.dispatch(f"server config import {path}")
+            await self.app.dispatch(f"server config import {shlex.quote(str(path))}")
 
         async def approve(message):
             path.write_text(dumps(definition(False)))
@@ -270,7 +271,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             return True
 
         await self.app.dispatch(
-            f"server config import {path}", confirm_callback=approve
+            f"server config import {shlex.quote(str(path))}", confirm_callback=approve
         )
         self.assertEqual((await self.app.tags.get("level")).address, 20)
         self.assertEqual(
@@ -428,8 +429,10 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         await self.app.dispatch("tags create running discrete_input 0 bool")
         await self.app.dispatch("server config set tag enable false")
         await self.app.dispatch("server config set tag running false")
-        await self.app.dispatch(f"server hook write {path} on_write")
-        await self.app.dispatch(f"server hook tick {path} on_tick --interval 0.02")
+        await self.app.dispatch(f"server hook write {shlex.quote(str(path))} on_write")
+        await self.app.dispatch(
+            f"server hook tick {shlex.quote(str(path))} on_tick --interval 0.02"
+        )
         await self.app.dispatch("server config validate")
         client = await self.client()
         response = await client.write_coil(0, True, device_id=1)
@@ -450,8 +453,8 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             (await client.read_discrete_inputs(0, count=1, device_id=1)).bits[0]
         )
         path_export = Path(self.folder.name) / "exported.toml"
-        await self.app.dispatch(f"server config export {path_export}")
-        self.assertEqual(load(path_export)["hooks"]["module"], str(path))
+        await self.app.dispatch(f"server config export {shlex.quote(str(path_export))}")
+        self.assertEqual(load(path_export)["hooks"]["module"], str(path.resolve()))
 
     async def test_raw_invalid_count_and_pipelined_transactions(self):
         await self.client()
@@ -525,7 +528,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         port = free_port()
         await self.app.dispatch(
-            f"server start tls 127.0.0.1 --port {port} --cert-file {cert} --key-file {key}"
+            f"server start tls 127.0.0.1 --port {port} --cert-file {shlex.quote(str(cert))} --key-file {shlex.quote(str(key))}"
         )
         context = ssl.create_default_context(cafile=str(cert))
         client = AsyncModbusTlsClient(
@@ -540,7 +543,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         client.close()
         await self.app.dispatch("server stop --confirm")
         await self.app.dispatch(
-            f"server start tls 127.0.0.1 --port {port} --cert-file {cert} --key-file {key} --ca-file {cert}"
+            f"server start tls 127.0.0.1 --port {port} --cert-file {shlex.quote(str(cert))} --key-file {shlex.quote(str(key))} --ca-file {shlex.quote(str(cert))}"
         )
         context.load_cert_chain(str(cert), str(key))
         client = AsyncModbusTlsClient(
