@@ -54,6 +54,15 @@ limits a request, not total addresses: 2,000 bits or 125 registers. Multi-writes
 are one request, never silently split (1,968 coils or 123 registers maximum).
 Validate the full requested range/value set before device I/O.
 
+Accepted extension, 2026-10-23: address-based holding-register writes accept
+comma-separated 16-bit integer literals with the same decimal/radix syntax as
+tags. Support signed int16 values and preserve unsigned 0–65535 input; negative
+values encode as two's complement. Each literal occupies one register, with no
+type inference or multi-register packing. Mixed `0x`/`0b`/`0o`/`0d` prefixes,
+signs, and underscores use one shared parser with tags. Parse every value before
+I/O; existing request limits, acknowledgements, and unsigned wire records apply.
+The earlier optional `--type` suggestion is not part of this change.
+
 ## D04 — Report protocol evidence accurately
 
 Accepted correctness goals; implemented policy, 2026-09-13; `b5dabf8`, `500949f`.

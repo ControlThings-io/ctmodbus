@@ -65,6 +65,8 @@ read holding_registers 0-500 --max-count 100
 write coils 128 0
 write coils 76 0,1,1,0,1,0,0,1
 write holding_registers 1000 14302,188,305
+write holding_registers 100 0x8000,0b0100110,0d800
+write holding_registers 100 -- -32768,-1,32767
 client stop
 ```
 
@@ -81,7 +83,16 @@ repetitions. A read accepts at most 65,536 addresses including repetitions.
 `--max-count` limits each request, not the total number of addresses: up to
 2,000 for bits and 125 for registers. Use `50-58` to read nine addresses at 50.
 
-Writes accept comma-separated integers: 0/1 for coils and 0–65535 for registers.
+Writes accept comma-separated integers: 0/1 for coils and -32768–65535 for
+holding registers. Each register value occupies one 16-bit register; negative
+values use two's complement (`-1` writes `0xFFFF`). Register values accept
+decimal and `0x`/`0b`/`0o`/`0d` prefixes, optional signs, and underscores,
+using the same integer literal syntax as tags. Prefixes may be mixed in one
+list: `0x8000,0b0100110,0d800` writes 32768, 38, and 800 to consecutive
+addresses. Use `--` before a list starting with a negative value. Omit spaces
+around commas or quote the entire list. Results and records show unsigned
+wire values. Use typed tags for floating-point or multi-register values.
+
 One value selects a single write; multiple values select one multiple-write
 request (at most 1,968 coils or 123 registers). Writes never split automatically.
 Success means the device returned a matching acknowledgement, not an independent

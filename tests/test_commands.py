@@ -175,6 +175,81 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             ["write_coil", "write_coils", "write_register", "write_registers"],
         )
 
+    async def test_register_radix_and_signed_writes(self):
+        """Encode mixed literals into one request and record unsigned wire words."""
+        await self.connect()
+        for literals, expected in (
+            ("0x8000,0b0100110,0d800", [32768, 38, 800]),
+            (
+                "-- -32768,-1,0,32767,32768,65535",
+                [32768, 65535, 0, 32767, 32768, 65535],
+            ),
+            (
+                "0XfFfF,0B1010,0o177777,0D8_00,+0x10,0008",
+                [65535, 10, 65535, 800, 16, 8],
+            ),
+            ("-- -0x8000,-0b1,-0o10,-0d800", [32768, 65535, 65528, 64736]),
+            ('"0x8000, 0b0100110, 0d800"', [32768, 38, 800]),
+        ):
+            with self.subTest(literals=literals):
+                before = len(self.client.calls)
+                result = await self.app.dispatch(
+                    f"write holding_registers 100 {literals}"
+                )
+                self.assertIn("Write acknowledged", result.output)
+                self.assertEqual(len(self.client.calls), before + 1)
+                self.assertEqual(
+                    self.client.calls[-1],
+                    (
+                        "write_registers",
+                        {"address": 100, "values": expected, "device_id": 7},
+                    ),
+                )
+        records = await self.app.records.query(direction="received")
+        self.assertEqual(len(records), 5)
+        self.assertIn(
+            [32768, 65535, 65528, 64736], [row.decoded["values"] for row in records]
+        )
+
+    async def test_register_radix_single_and_maximum_write(self):
+        """Retain single-write selection and accept exactly 123 encoded words."""
+        await self.connect()
+        await self.app.dispatch("write holding_registers 65535 -- -0b1")
+        self.assertEqual(
+            self.client.calls[-1],
+            ("write_register", {"address": 65535, "value": 65535, "device_id": 7}),
+        )
+        await self.app.dispatch(
+            "write holding_registers 65413 " + ",".join(["0xffff"] * 123)
+        )
+        self.assertEqual(len(self.client.calls), 2)
+        self.assertEqual(self.client.calls[-1][0], "write_registers")
+        self.assertEqual(self.client.calls[-1][1]["values"], [65535] * 123)
+
+    async def test_invalid_register_literals_do_not_send(self):
+        """Reject invalid later values and spans before any part of a write is sent."""
+        await self.connect()
+        for literals in (
+            "1,0x10000",
+            "1,0d65536",
+            "1,-32769",
+            "1,-0x8001",
+            "1,0b102",
+            "1,0o8",
+            "1,0x",
+            "1,1.5",
+            "1,nan",
+            "1,true",
+            "1,",
+            "1,,2",
+            ",".join(["0x0"] * 124),
+        ):
+            with self.subTest(literals=literals), self.assertRaises(CommandError):
+                await self.app.dispatch(f"write holding_registers 0 {literals}")
+        with self.assertRaises(CommandError):
+            await self.app.dispatch("write holding_registers 65535 0x1,0x2")
+        self.assertEqual(self.client.calls, [])
+
     async def test_invalid_arguments_do_not_send(self):
         """Ensure rejected ranges and write values produce no client requests."""
         await self.connect()

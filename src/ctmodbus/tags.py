@@ -32,6 +32,7 @@ from ctui import (
 from tabulate import tabulate
 
 from ctmodbus.formatting import timestamp
+from ctmodbus.integers import INTEGER_PATTERN, parse_integer
 
 TAG_FIELDS = {"table", "address", "type", "byte_order", "word_order"}
 
@@ -58,10 +59,6 @@ TYPE_FORMATS = {
 }
 TYPES = ("bool", *TYPE_FORMATS)
 NAME_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*\Z")
-INTEGER_PATTERN = re.compile(
-    r"(?P<sign>[+-]?)(?:(?P<prefix>0[bBoOdDxX])(?P<digits>[0-9A-Fa-f_]+)|"
-    r"(?P<decimal>[0-9][0-9_]*))\Z"
-)
 
 
 @dataclass(frozen=True)
@@ -351,28 +348,11 @@ class TagStore:
         await self.backend.touch()
 
 
-def _parse_integer(text):
-    """Return a signed integer from decimal or 0b/0o/0d/0x text.
-
-    Strip underscores from matched digits and accept an optional leading sign.
-    Malformed text or digits invalid for the radix raise ValueError. Width and
-    two's-complement interpretation are handled by callers.
-    """
-    match = INTEGER_PATTERN.fullmatch(text)
-    if not match:
-        raise ValueError("expected an integer or 0b/0o/0d/0x literal")
-    digits = (match.group("digits") or match.group("decimal")).replace("_", "")
-    prefix = (match.group("prefix") or "0d").lower()
-    base = {"0b": 2, "0o": 8, "0d": 10, "0x": 16}[prefix]
-    value = int(digits, base)
-    return -value if match.group("sign") == "-" else value
-
-
 def parse_tag_value(tag, text):
     """Return bool, int, or float parsed for an already validated tag.
 
     Bool accepts case-insensitive 0/1, false/true, off/on. Integer syntax follows
-    _parse_integer; unsigned nondecimal literals fitting a signed tag's bit width
+    parse_integer; unsigned nondecimal literals fitting a signed tag's bit width
     use two's complement, while explicit signs and decimal stay numeric. Floats
     accept decimal/scientific text or integer literals converted numerically,
     never raw IEEE bits. Reject non-finite input with CommandError. Integer and
@@ -398,11 +378,11 @@ def parse_tag_value(tag, text):
             try:
                 value = float(text.replace("_", ""))
             except ValueError:
-                value = float(_parse_integer(text))
+                value = float(parse_integer(text))
             if not math.isfinite(value):
                 raise ValueError("non-finite values are not supported")
             return value
-        value = _parse_integer(text)
+        value = parse_integer(text)
         if tag.type.startswith("int"):
             match = INTEGER_PATTERN.fullmatch(text)
             prefix = (match.group("prefix") or "0d").lower()

@@ -17,6 +17,7 @@ from ctui import (
 )
 
 from ctmodbus.formatting import format_identification, format_values, timestamp
+from ctmodbus.integers import parse_integer
 
 READ_LIMITS = {
     "coils": 2000,
@@ -63,6 +64,22 @@ def validate_write(kind, address, values):
         raise CommandError("Write addresses must be between 0 and 65535")
     if any(type(value) is not int or not 0 <= value <= maximum for value in values):
         raise CommandError(f"{kind} values must be integers between 0 and {maximum}")
+
+
+def parse_register_value(text: str) -> int:
+    """Return one wire word from signed int16 or unsigned uint16 literal text.
+
+    Accept the shared tag integer syntax, stripping surrounding whitespace for
+    comma-separated lists. Reject malformed literals and values outside
+    -32768..65535 with CommandError; encode negatives as 16-bit two's complement.
+    """
+    try:
+        value = parse_integer(text.strip())
+    except ValueError as error:
+        raise CommandError(f"Invalid register value {text!r}: {error}") from error
+    if not -32768 <= value <= 65535:
+        raise CommandError(f"Register value {text!r} must be between -32768 and 65535")
+    return value & 0xFFFF
 
 
 class ModbusCommandMixin:
@@ -367,7 +384,20 @@ class ModbusCommandMixin:
         """Write one or more coils as comma-separated 0/1 values."""
         return await self.write_values("coils", address, values)
 
-    @command(name="write holding_registers")
-    async def write_holding_registers(self, address: int, values: list[int]):
-        """Write one or more registers as comma-separated integers."""
-        return await self.write_values("holding_registers", address, values)
+    @command(
+        name="write holding_registers",
+        arguments={
+            "address": Argument(help="First zero-based register address"),
+            "values": Argument(help="Comma-separated 16-bit decimal or radix values"),
+        },
+    )
+    async def write_holding_registers(self, address: int, values: list[str]):
+        """Write 1–123 consecutive registers from decimal or 0b/0o/0d/0x values.
+
+        Each value occupies one register. Accept -32768..65535, encoding negative
+        values as two's complement; use ``--`` before a negative positional list.
+        Parse the entire list before the validated write path sends one request.
+        Acknowledgements and records contain the unsigned wire words.
+        """
+        encoded = [parse_register_value(value) for value in values]
+        return await self.write_values("holding_registers", address, encoded)

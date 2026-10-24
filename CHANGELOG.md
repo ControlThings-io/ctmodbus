@@ -2,6 +2,10 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Accept mixed decimal and `0x`/`0b`/`0o`/`0d` literals in address-based
+  holding-register write lists, including signed 16-bit values encoded as
+  two's complement. Preserve unsigned 0–65535 values and single-request limits.
+
 - Add confirmed `tags delete --all` and explicit `--remove-server-rules` for
   single/bulk deletion. Remove tags and referenced server tag entries atomically,
   preserve other configuration, warn about hook references, and retain standard

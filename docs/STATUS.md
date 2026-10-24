@@ -1,9 +1,17 @@
 # Project status
 
-Last reconciled: 2026-10-07, `dev-v1.0.0` at `f0cdb23`, with local confirmed
-bulk tag deletion and atomic server tag-rule removal. Changes remain uncommitted.
+Last reconciled: 2026-10-23, `dev-v1.0.0` at `5db3c8e`, with local radix and
+signed 16-bit address-based register writes. These changes remain uncommitted;
+the prior bulk tag deletion work is committed at `5db3c8e`.
 
 ## Current state
+
+- `write holding_registers` accepts comma-separated mixed decimal and
+  `0x`/`0b`/`0o`/`0d` literals using the shared tag integer parser. Signed int16
+  values encode as two's complement, existing unsigned values remain supported,
+  and each literal occupies one register. Full-list validation precedes the
+  existing single-request write path. See [README usage](../README.md#interactive-commands)
+  and D03; optional typed address writes remain outside this change.
 
 - Async migration, TLS, project-scoped typed tags (`5eb04ee`), and USB identity
   in serial completion (`4718ddd`) are implemented. Architecture and accepted
@@ -121,6 +129,20 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 23 radix register writes on `5db3c8e` plus the working tree,
+  Python 3.11.16 with adjacent ctui at `755f5ac`: all 130 tests passed with no
+  skips, including tag codecs, mixed-radix/signed write dispatch and records,
+  single/multiple function selection, the 123-register/address boundary, and
+  rejection of malformed/out-of-range values before I/O. The focused command
+  suite also passed all 32 tests. The first full run exposed an incorrect records
+  API call in the new test; it was corrected before these passing runs.
+- Black/isort checks, pylint (10.00/10), lockfile and whitespace checks passed.
+  Tests and checks used the editable ctui override; sandbox cache access required
+  running uv checks outside the sandbox. Dependency metadata and lockfile are
+  unchanged. Physical devices, manual terminal/browser checks, remote CI and
+  distribution artifact checks were not run for this command-parsing change;
+  published-ctui release validation remains outstanding.
 
 - October 7 tag deletion on `f0cdb23` plus the working tree, Python 3.11.16
   with adjacent ctui at `79579d0`: all 127 tests passed. New regressions cover
