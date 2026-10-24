@@ -42,7 +42,7 @@ returns immediately. After all commands succeed, CLI stays alive if a listener
 remains running:
 
 ```bash
-uv run --with-editable ../ctui ctmodbus \
+uv run ctmodbus \
   -c "server config import examples/device.toml" \
   -c "server start tcp 127.0.0.1 --port 5020"
 ```
@@ -316,5 +316,6 @@ suppresses routine forwarding lines. `server logging on/off` and
 `proxy logging on/off` update these policies live, and status commands show them.
 Errors bypass both quiet settings; operation recording is independent of display.
 Request IDs increase across listener restarts within an application, and verbosity
-settings are runtime-only. See the [usage examples](../README.md#server-and-proxy-request-output)
-for timestamps, compact previews, and CLI behavior.
+settings are runtime-only. See the [server logging examples](../README.md#server-request-output)
+and [proxy logging examples](../README.md#proxy-request-output) for timestamps,
+compact previews, and CLI behavior.

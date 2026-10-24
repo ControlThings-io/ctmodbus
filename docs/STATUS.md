@@ -1,10 +1,19 @@
 # Project status
 
-Last reconciled: 2026-10-23, `dev-v1.0.0` at `9c15d08`, with an uncommitted
-update to published stable `ctui==1.0.0`. Radix and signed register writes are
-committed at `9c15d08`; local published-dependency checks below pass.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `1fda698`, with an uncommitted
+README rewrite and example audit. Published stable `ctui==1.0.0` is committed
+at `1fda698`; local documentation and regression checks below pass.
 
 ## Current state
+
+- README uses the owner's approved informal, concise technical style throughout.
+  The feature list distinguishes flexible reads from consecutive writes and
+  runtime status from saved project data. Development setup is consolidated;
+  separate server and proxy sections each include their own request logging
+  examples, before CLI/project usage. Corrected project history
+  export, stale polling deferral, and the linked server guide's ctui override.
+  PyPI still lists 0.6.0 on October 24, so installation directs readers to the
+  checkout for 1.0 features until publication.
 
 - `write holding_registers` accepts comma-separated mixed decimal and
   `0x`/`0b`/`0o`/`0d` literals using the shared tag integer parser. Signed int16
@@ -22,12 +31,13 @@ committed at `9c15d08`; local published-dependency checks below pass.
   The temporary adjacent-checkout override has ended. `uv sync --locked`
   replaces prior editable ctui installations in `.venv`; direct imports now
   resolve to ctui 1.0.0 in site-packages. See the
-  [development setup](../README.md#installation) and D06.
+  [development setup](../README.md#development-and-validation) and D06.
 - October 23 release review confirmed ctui 1.0.0 on PyPI; ctmodbus remains
   unpublished at 1.0 and CHANGELOG remains Unreleased. Existing
   [CI at 9c15d08](https://github.com/ControlThings-io/ctmodbus/actions/runs/40051287256)
   failed because the old ctui RC1 dependency lacks newer imports. The updated
-  dependency passes local tests/lint; remote CI has not run on this change.
+  dependency passes local tests/lint; remote CI after the dependency update
+  has not been reviewed here.
   The GitHub `pypi` environment exists; PyPI trusted publisher configuration
   still needs verification.
 - The September 21 audit updates global documentation ownership rules, expands
@@ -122,6 +132,7 @@ committed at `9c15d08`; local published-dependency checks below pass.
    [release checklist](../RELEASE_CHECKLIST.md) on the intended release revision,
    including the full remote platform matrix, artifacts, terminal/browser
    checks, and physical RTU/ASCII devices. Record actual evidence here.
+   Remove README's temporary checkout-installation note once 1.0 is published.
 4. Confirm the PyPI trusted publisher configuration and obtain release approval
    before publication (D08).
 
@@ -130,6 +141,26 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 24 README/example audit on `1fda698` plus documentation changes,
+  Python 3.11.16/Linux x86-64 with published ctui 1.0.0: checked command syntax
+  for all 91 fenced command examples plus inline rename/exit examples against
+  the installed registry/parser, and executed 96 setup/workflow commands
+  in temporary projects against real local TCP endpoints. Covered raw/tag I/O,
+  import collision approval/replacement, tag deletion and saved server rules,
+  polling start/status/stop, pump/tank import/hook validation/export, actual proxy
+  forwarding, logging switches, saved profiles, history/project export and
+  project switches. Live checks substitute loopback ports, fixture unit 1 and
+  temporary paths; polling is stopped after its first cycle. Hardware and example
+  production endpoints are not contacted. CLI help and web startup defaults
+  match the documented options.
+- All 130 existing regression tests passed with no skips, including TCP/UDP,
+  TLS/mTLS, serial PTYs, terminal/browser behavior and CLI cleanup. This is
+  Linux/local evidence, not a remote matrix or physical-adapter check. Local
+  documentation checks passed for 36 local links/anchors, balanced Markdown
+  fences and whitespace. No runtime code,
+  dependency metadata or release version changed; no publication or new artifact
+  build was performed for this documentation-only work.
 
 - October 23 published ctui adoption on `9c15d08` plus the working tree,
   Python 3.11.16/Linux x86-64: all 130 tests passed with no skips, including

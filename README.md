@@ -1,58 +1,66 @@
 # ControlThings Modbus
 
-An asynchronous Modbus tool for device testing, built with
-[ctui](https://github.com/ControlThings-io/ctui) and
+An asynchronous Modbus tool for functional and cybersecurity protocol testing,
+built with [ctui](https://github.com/ControlThings-io/ctui) and
 [PyModbus](https://github.com/pymodbus-dev/pymodbus).
 
-The 1.0 release candidate supports TCP, UDP, TLS, serial RTU, and serial ASCII;
-device identification; coils, discrete inputs, input registers, and holding
-registers; and single/multiple coil and holding-register writes.
-Project-scoped tags add names and integer, floating-point, or Boolean types to
-those wire addresses.
+Features in 1.0.0:
+
+- Terminal UI, web UI, and scriptable CLI
+- Clients and servers for TCP, UDP, TLS, serial RTU, and serial ASCII
+- Device identification, reads across all four Modbus tables, and
+  single/multiple coil and holding-register writes
+- Named tags with automatic Boolean, integer, and floating-point conversion,
+  configurable byte/word order, and tag import/export
+- Client reads using address lists and ranges, consecutive writes, and
+  polling of addresses or tags with interval, count, and duration settings
+- Server simulation with static, random, and sequence values, optional
+  Python hooks, and validated config import/export
+- Proxying between any combination of the supported transports
+- Runtime views of last read values and write outcomes, plus optional
+  server/proxy request logging
+- Saved projects with command history, configs, tags, operation records,
+  and project import/export
 
 ## Installation
 
-Requires Python 3.11 or newer. Install the release candidate from this checkout:
+Requires Python 3.11 or newer. Until 1.0.0 is published, use the
+[checkout setup](#development-and-validation) for the features described here.
+The PyPI commands below install the latest published release.
+
+Install from PyPI:
 
 ```bash
-uv tool install .
+pip3 install ctmodbus
 ```
 
-For development:
+Or better yet, use `uv` to install it in an isolated environment:
 
 ```bash
-uv sync --locked --python 3.11
-uv run ctmodbus
+uv tool install ctmodbus
 ```
 
-Development and release validation use the published `ctui==1.0.0` dependency.
-The temporary adjacent-checkout override has ended. Run `uv sync --locked` to
-replace an older editable ctui install; IDEs using `.venv/bin/python` will then
-use the locked package too.
+Just trying it out? Run it with `uvx`:
 
-After a release candidate has been published, install it with
-`uv tool install 'ctmodbus==1.0.0rc1'` or
-`python -m pip install 'ctmodbus==1.0.0rc1'`.
+```bash
+uvx ctmodbus
+```
+
+Run `ctmodbus` for the terminal UI or `ctmodbus --web` for the web UI.
+Web mode prints a local URL with a session token; open that URL in your browser.
+Use `ctmodbus --help` for startup options, including web port and TLS settings.
 
 ## Interactive commands
 
-Run `ctmodbus` without arguments to open the terminal interface. Commands have
-automatic completion, generated help, and unique-prefix matching. Use `help`
-for the full list, including ctui's project, config, and history commands.
+Both UIs offer completion, generated help, and unique command prefixes.
+Use `help` for the command list, or `help read` for a specific group.
+Enter `client`, `server`, or `proxy` for a short overview with examples.
+`help client`, `help server`, and `help proxy` give the full references.
 
-Larger commands follow **component → action → transport or target**:
-`client start tcp HOST`, `server start tcp HOST`, and `proxy start`.
-Bare `client`, `server`, and `proxy` open example help in TUI/WUI popups
-and print examples in CLI. `help client`, `help server`, and `help proxy` remain generated references. Old connect/serve/profile/close/cancel
-spellings and proxy enable/disable are removed; ordinary unique prefixes remain.
+Connect to a device, then read or write its addresses:
 
 ```text
-client discover                                   # suggest serial ports and local services
 client start tcp 10.10.10.1 --port 502 --unit 1
-client start udp 10.10.10.1 --port 10502
-client start tls plc.example.com --ca-file plant-ca.pem
-client start rtu /dev/ttyUSB0 --baudrate 9600 --parity E
-client start ascii COM2 --baudrate 9600
 read id
 read discrete_inputs 1
 read coils 1,3,5,7
@@ -64,44 +72,92 @@ write coils 76 0,1,1,0,1,0,0,1
 write holding_registers 1000 14302,188,305
 write holding_registers 100 0x8000,0b0100110,0d800
 write holding_registers 100 -- -32768,-1,32767
+client status
 client stop
 ```
 
-These examples show alternative connections: close the current session before
-opening another. Serial-device completion shows the USB manufacturer and product
-beside each device path when the operating system provides them. Discovery is
-advisory; device paths and symlinks can be supplied even if enumeration does not
-list them. UDP opening establishes a local socket and does not prove that a
-remote Modbus device is present.
+Replace the host, unit, and addresses with ones your device supports. Only one
+client connection can be open at a time. Other connection options include:
 
-Addresses are **zero-based wire addresses**, from 0 through 65535, rather than
-4xxxx reference numbers. Ranges are inclusive and preserve input order and
-repetitions. A read accepts at most 65,536 addresses including repetitions.
-`--max-count` limits each request, not the total number of addresses: up to
-2,000 for bits and 125 for registers. Use `50-58` to read nine addresses at 50.
+```text
+client start udp 10.10.10.1 --port 10502
+client start tls plc.example.com --ca-file plant-ca.pem
+client start rtu /dev/ttyUSB0 --baudrate 9600 --parity E
+client start ascii COM2 --baudrate 9600
+```
 
-Writes accept comma-separated integers: 0/1 for coils and -32768–65535 for
-holding registers. Each register value occupies one 16-bit register; negative
-values use two's complement (`-1` writes `0xFFFF`). Register values accept
-decimal and `0x`/`0b`/`0o`/`0d` prefixes, optional signs, and underscores,
-using the same integer literal syntax as tags. Prefixes may be mixed in one
-list: `0x8000,0b0100110,0d800` writes 32768, 38, and 800 to consecutive
-addresses. Use `--` before a list starting with a negative value. Omit spaces
-around commas or quote the entire list. Results and records show unsigned
-wire values. Use typed tags for floating-point or multi-register values.
+These are alternatives: run `client stop` before changing connections.
+`client discover` suggests serial ports and local services. Serial completion
+includes USB manufacturer/product details when available. You can still enter
+device paths and symlinks that discovery doesn't list. Opening UDP creates a
+local socket; it doesn't confirm that a remote device is responding.
 
-One value selects a single write; multiple values select one multiple-write
-request (at most 1,968 coils or 123 registers). Writes never split automatically.
-Success means the device returned a matching acknowledgement, not an independent
-readback. Failed or interrupted writes may have reached the device; an
-unconfirmed outcome is reported explicitly.
+### Addresses and raw writes
+
+Addresses are **zero-based wire addresses**, from 0 through 65535. Convert
+4xxxx reference numbers to wire addresses before using them. Read ranges include
+both ends: `50-58` reads nine addresses. Lists preserve order and repetitions,
+with at most 65,536 addresses per read.
+
+`--max-count` limits the addresses in each request, up to 2,000 bits or 125
+registers. Larger reads split into requests automatically.
+
+Writes take a starting address and comma-separated values for consecutive
+addresses. Coils accept `0` or `1`; holding registers accept -32768–65535.
+Each value uses one 16-bit register. Negative values use two's complement:
+`-1` writes `0xFFFF`.
+
+Register values accept decimal and `0x`/`0b`/`0o`/`0d` prefixes, signs, and
+underscores. Mix prefixes freely: `0x8000,0b0100110,0d800` writes 32768, 38,
+and 800. Put `--` before a list starting with a negative value. Leave out spaces
+around commas or quote the whole list. Results and records show unsigned wire
+values; use [tags](#tags) for floats and values spanning multiple registers.
+
+One value uses a single-write function; multiple values use one multiple-write
+request. The limits are 1,968 coils or 123 registers, and writes never split.
+A matching acknowledgement confirms the write response, not an independent
+readback. Failed or interrupted writes may still have reached the device;
+ctmodbus reports an unconfirmed outcome explicitly.
+
+## Connection options and operation results
+
+Client defaults are:
+
+| Setting | Default | Option |
+| --- | --- | --- |
+| Unit ID | 1, supported range 1–247 | `--unit` |
+| Timeout | 3 seconds for network, 1 for serial | `--timeout` |
+| Retries | 0, supported range 0–10 | `--retries` |
+| Network port | 502 for TCP/UDP, 802 for TLS | `--port` |
+| Serial framing | 9600 baud, 8 data bits, no parity, 1 stop bit | `--baudrate`, `--bytesize`, `--parity`, `--stopbits` |
+
+Supply host and port separately, including for IPv6 addresses.
+
+TLS uses Modbus TLS framing and verifies the certificate and hostname by
+default. Use `--ca-file PATH` for a private CA, and
+`--cert-file PATH --key-file PATH` for client authentication. The certificate
+file can include its key; otherwise supply a separate unencrypted key file.
+`--insecure` disables server certificate and hostname verification.
+Saved configs retain paths and verification settings, so the referenced files
+must be available when reconnecting.
+
+Requests run asynchronously and share one serialized connection. The status bar
+shows connection state and read progress. `client stop` cancels outstanding
+work and closes the connection; reconnect explicitly before more device I/O.
+In the interactive UI, Ctrl-C clears the input line. Use `client stop` to stop
+an active device command.
+
+Read output includes UTC timestamps and compact address/value summaries.
+Registers have integer, hex, and character views. Each character represents
+one register's Unicode code point; it isn't a UTF-8 string decoder. If a
+chunked read fails, the error output retains values already read.
 
 ## Tags
 
-Tags give device addresses project-scoped names and types. The type determines
-the number of addresses, so creation takes only the first zero-based address.
-Tags use the active connection and unit; they do not store a host, unit, or
-connection profile.
+Give addresses names and types so you can work with values directly.
+Tags belong to the project and use the active client connection and unit.
+A tag's type determines its width; supply only its first address.
+Connect the client before the read/write commands below.
 
 ```text
 tags create pause_sw coil 0 bool
@@ -118,73 +174,73 @@ write tag timer 0x8000_0000
 write tag timer -- -2_000_000_000
 write tag state 0b0111_0001
 write tag pause_sw on
-tags rename timer duration
-tags delete duration
-tags export my_tags
-tags import my_tags.toml
 ```
 
-Types are `bool`, signed and unsigned 8-, 16-, 32-, and 64-bit integers, and
-32- or 64-bit floating point. Integer input accepts signed decimal values and
-`0b`, `0o`, `0d`, or `0x` radix prefixes; underscores are allowed. Boolean input
-accepts `0`/`1`, `false`/`true`, and `off`/`on`. Floating input accepts finite
-decimal or scientific notation; NaN and infinity are rejected.
+`read tags` reads all tags in name order. A comma-separated list selects tags
+in your requested order, including duplicates. Each tag is read separately,
+with other device commands held until the whole command finishes. On failure
+or cancellation, completed rows remain visible and unread tags are reported.
+Device values can change between reads.
+Cancellation closes the connection; reconnect before continuing.
 
-For signed integer tags, unsigned binary, octal, or hexadecimal literals are
-interpreted as fixed-width bit patterns: `0x8000_0000` is `-2147483648` for an
-`int32`, and `0xFFFF_FFFF` is `-1`. Decimal input remains numeric and must fit
-the declared range. Place ctui's `--` end-of-options marker before a negative
+Rename a tag with `tags rename timer duration`.
+
+### Types and values
+
+`tags create` takes a singular table name: `coil`, `discrete_input`,
+`input_register`, or `holding_register`. Coils and discrete inputs use `bool`;
+registers use signed/unsigned 8-, 16-, 32-, or 64-bit integers, or `float32` and
+`float64`. Only coils and holding registers can be written. Overlapping tags
+are allowed, with a warning, for alternative interpretations of the same data.
+
+Boolean input accepts `0`/`1`, `false`/`true`, or `off`/`on`. Integers accept
+decimal and `0b`, `0o`, `0d`, or `0x` prefixes, with optional underscores.
+Floats accept finite decimal or scientific notation; NaN and infinity are
+rejected.
+
+For signed tags, unsigned binary/octal/hex literals represent fixed-width bit
+patterns. For an `int32`, `0x8000_0000` means -2147483648 and `0xFFFF_FFFF`
+means -1. Decimal input must fit the numeric range. Use `--` before a negative
 positional value, as in `write tag timer -- -2000000000`.
 
-Register tags default to Modbus-standard big-endian byte order inside each
-16-bit register and little-endian word order across registers. Override these
-with `--byte-order little|big` and `--word-order little|big`. An 8-bit value
-occupies the selected byte and the unused byte is written as zero: big byte
-order places it in the low byte; little byte order places it in the high byte.
-Byte and word order do not apply to Boolean tags.
+### Byte and word order
 
-`tags create` uses the singular table names `coil`, `discrete_input`,
-`input_register`, and `holding_register`. Coils and discrete inputs support
-`bool`; input and holding registers support numeric types. Writes are limited to
-coils and holding registers. Overlapping tags are allowed and reported when
-created because alternate interpretations can be useful. Tagged operations
-retain normal response validation, recording, cancellation, and uncertain-write
-reporting. Multi-tag reads hold one connection reservation across the command,
-with one request per tag. Failure or cancellation preserves completed decoded
-rows, identifies the failed tag, and reports how many remaining tags were not
-read. Cancellation closes the connection; reconnect before further device I/O.
-This prevents command interleaving, not changes to device values between reads.
+Register tags default to big-endian bytes within each register and
+little-endian words across registers. Set `--byte-order little|big` and
+`--word-order little|big` to match your device.
 
-`read tags` without names reads every tag in name order. Supply a comma-separated
-list to read only those tags while preserving the requested order and duplicates.
+An 8-bit tag still uses a full register. Big byte order selects the low byte;
+little byte order selects the high byte. Writes zero the unused byte.
+Byte and word order don't apply to Boolean tags.
 
-Tag files are versioned TOML. Export appends `.toml` when absent and replaces
-the destination atomically. Import validates the whole file before changing the
-project. Imports retain the exact validated content during confirmation and
-reserve the project and tag edits until finished. The tag merge commits all
-rows or none. Both commands suggest filesystem paths in the TUI. Existing names
-trigger a TUI confirmation; CLI and command-file use report the conflicting
-names and require `--replace`.
+### Import and export
 
-Concurrent exports still assume sequential use. See the
-[documented concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
-before embedding concurrent tag-management or project-switching commands.
+```text
+tags export my_tags
+tags import my_tags.toml
+tags import my_tags.toml --replace
+```
+
+Tag files use versioned TOML. Export adds `.toml` if needed and atomically
+replaces the destination. Import validates the whole file and applies all rows
+or none. Existing names need confirmation in the terminal/web UI, or
+`--replace` in CLI and command files. The exact validated contents are retained
+while you confirm; project changes and tag edits are blocked until it finishes.
+Both commands offer path completion.
+
+Exports assume sequential use. See the
+[concurrency limitations](docs/DECISIONS.md#d12--implementation-discrepancies-and-ctui-proposals)
+if you're embedding concurrent tag or project operations.
 
 ### Removing tags
 
-Delete one tag with `tags delete NAME`, or all project tags with
-`tags delete --all`. The server and polling must be stopped. Bulk deletion
-requires a Yes/No confirmation in TUI/WUI, or explicit `--confirm` in CLI;
-an empty project reports "No tags to delete" without prompting. A name and
-`--all` cannot be combined.
+Delete one tag with `tags delete NAME`, or every tag with `tags delete --all`.
+Stop the server and polling first. Bulk deletion needs Yes/No approval in the
+terminal/web UI or `--confirm` in CLI. An empty project needs no confirmation.
+A name and `--all` can't be combined.
 
-Saved server tag entries prevent deletion by default. The error lists referenced
-tags; add `--remove-server-rules` to remove those entries in the same atomic
-transaction. This also works for one tag and requires approval. Raw ranges,
-table defaults, identity, unit/seed settings and hooks stay unchanged. If hooks
-exist, the confirmation warns that Python references may need manual updates;
-companion scripts are never inspected or rewritten. Hook warnings also require
-approval for a single unreferenced tag.
+Saved server rules referencing a tag block deletion. Add
+`--remove-server-rules` to delete those entries in the same transaction:
 
 ```text
 tags delete temperature
@@ -193,18 +249,18 @@ tags delete --all
 tags delete --all --remove-server-rules --confirm
 ```
 
-Declining or cancelling approval changes nothing. Failures within the deletion transaction roll back
-both tag removal and server configuration changes. Completion uses the existing
-result MessageDialog in TUI/WUI. Exported TOML files remain unchanged; importing
-one later can recreate its tags.
+These are alternatives; replace `temperature` with an existing tag name.
+Rule removal needs approval even for one tag. Other server settings and raw
+ranges stay intact. If hooks exist, approval also warns that Python references
+may need updating, even when deleting a single unreferenced tag. Companion
+scripts aren't changed.
+
+Declining approval changes nothing; a transaction failure rolls back both tags
+and server rules. Exported files stay untouched and can be imported again later.
 
 ## Polling
 
-Start one poll in the TUI or WUI; commands remain available while it runs.
-`poll tags` snapshots all tags in name order, or takes an ordered comma-separated
-list. `poll raw` takes one or more table options using the same inclusive address
-syntax as `read`. Each address/range is a separate column; table options and
-ranges retain their command-line order, including duplicates.
+Run one poll at a time while keeping the terminal/web UI available:
 
 ```text
 poll tags
@@ -214,22 +270,24 @@ poll status
 poll stop
 ```
 
-The interval defaults to one second. Interval and duration are positive finite
-seconds; count is a positive number of started cycles. Both limits work in the
-TUI and WUI; when both are supplied, the first reached stops new cycles. Duration
-limits cycle starts, allowing an active cycle to finish. In CLI `-c`/`-f` mode,
-polling streams output and waits for completion before the next command; supply
-limits for scripts. An unlimited CLI poll runs until interrupted.
+These are alternative polls; stop one before starting another. `poll tags`
+uses all tags in name order or the supplied comma-separated list. `poll raw`
+uses the same inclusive ranges as `read`, with a column per address/range.
+Table options, ranges, and repeated targets keep their supplied order.
 
-The first cycle starts immediately. Later cycles target a fixed monotonic-clock
-schedule (`start + n × interval`), without adding response time to the interval.
-Each cycle serializes all selected reads on the existing connection. Ticks while
-that cycle or another device operation is busy are skipped, never queued or
-replayed. Event-loop delays also skip obsolete ticks. Scheduling is best effort,
-not a guarantee of exact wire timing. `poll status` reports started/completed
-cycles, skipped ticks, failed columns, limits, targets, and last cycle duration.
+The default interval is one second. Interval and duration must be positive,
+finite seconds; count limits started cycles. With both count and duration,
+the first limit reached stops new cycles and the active cycle finishes.
+In CLI mode, polling streams results and waits before running the next command.
+Use limits in scripts; an unlimited CLI poll runs until interrupted.
 
-A header and one line per started cycle append to existing output:
+The first cycle starts immediately. Later cycles follow a fixed schedule
+without adding response time to the interval. Busy or overdue ticks are
+skipped, never queued for catch-up. All reads in a cycle share the client
+connection, so timing is best effort. `poll status` shows targets, limits,
+started/completed cycles, skipped ticks, failed columns, and last cycle duration.
+
+Each started cycle appends a row, including unchanged values:
 
 ```text
      # |       timer | state | pause_sw
@@ -241,74 +299,144 @@ A header and one line per started cycle append to existing output:
      2 | 0000 0072 ERR         | 000B 0100               | 10110011
 ```
 
-Column widths are set when polling starts from headers, tag type bounds, and raw
-range lengths. The `#` counter and numeric tags align right; booleans and raw
-sequences align left, with ` | ` between every column. Unlimited polls reserve
-six counter characters; bounded polls reserve at least three. If any value or
-counter outgrows its width, a wider header precedes that row; earlier rows retain
-their original spacing. Floats use up to nine significant digits for float32 and
-17 for float64, with scientific notation where appropriate and `.0` for integral
-values displayed without an exponent. Raw operation records remain unchanged.
+Tags show decoded values; raw bits use `0`/`1` and raw registers use four-digit
+uppercase hex. Columns widen and repeat their header when needed. Float32/64
+values use up to 9/17 significant digits. `ERR` marks a failed tag or range;
+completed chunks remain visible. Other columns and cycles continue while the
+connection is usable. Records retain raw values and errors, and old values
+aren't shown as fresh results.
 
-Tags display decoded integers, floats, or booleans. Raw bits use contiguous
-`0`/`1`; registers use four uppercase hex digits without `0x`, separated by
-spaces. A failed tag displays `ERR`; a raw range retains confirmed chunks and
-appends `ERR` if a later chunk fails. Other columns and cycles continue while
-the connection remains usable. Existing operation records retain confirmed raw
-values and detailed errors; previous values are never presented as fresh results.
-All completed rows append, including unchanged values.
+Stop polling before editing tags or switching projects. `poll stop` waits for
+the active cycle and leaves the connection open. `client stop`, connection loss,
+or application shutdown also stop polling. Cancellation closes the connection;
+a poll never moves to a replacement connection automatically.
 
-Tag definitions cannot be edited during polling or target preparation. Stop the
-poll before changing projects; polls never follow a replacement connection.
-`poll stop` stops future ticks and waits for the active cycle without closing the
-connection. `client stop`, connection loss, or application shutdown stop
-polling; cancellation closes the transport and requires explicit reconnection.
+## Server
+
+Run one server alongside the independent client. In a fresh project, the server
+exposes all four tables at addresses 0–65535, initially false/zero:
+
+```text
+server start tcp 127.0.0.1 --port 5020
+server status
+server stop
+```
+
+Server TCP/UDP default to loopback port 5020; TLS defaults to loopback port
+8020 and requires certificate/key files. RTU/ASCII servers use their own serial
+port and respond as devices, not passive taps.
+
+Configure raw ranges or typed tags with static, random, or sequence values,
+and add Python hooks for device behavior. Edit the definition with
+`server config` commands or import TOML. From a repository checkout, try the
+[pump/tank example](examples/device.toml) and its
+[companion hooks](examples/device_logic.py):
+
+```text
+server config import examples/device.toml
+server config validate
+server config show
+server config export device.toml
+server start tcp 127.0.0.1 --port 5020
+server stop
+```
+
+Stop the server before editing its definition or changing projects. Import
+replaces the server definition and merges its tags; conflicting tags need
+approval or `--replace`. Python hooks execute as trusted application code,
+including during validation.
+
+See the [server guide](docs/SERVER.md) for configuration, hooks, and reset
+behavior.
+
+### Server request output
+
+Listeners log incoming requests by default:
+
+```text
+2026-10-06T14:32:05.123+00:00 SERVER #42 peer=('127.0.0.1', 53120) unit=1 read holding_registers 10-12
+```
+
+Lines include UTC timestamps, endpoint, unit, function/table, and address range.
+Write previews show at most 16 values; records retain the full payload.
+An arrival line describes an attempt, not a successful response.
+
+Use `--quiet` on any `server start` command to suppress routine lines, or
+toggle logging while the listener runs:
+
+```text
+server logging off
+server logging on
+```
+
+Errors remain visible and recording continues. Each server start resets its
+logging setting from `--quiet`; the setting isn't saved. Request logs append
+to output in terminal, web, and CLI modes.
+
+## Proxy
+
+To bridge transports, connect the client to the upstream device, start a server
+for downstream clients, then enable proxying:
+
+```text
+client start rtu /dev/ttyUSB0 --baudrate 9600 --retries 0
+server start tcp 127.0.0.1 --port 5020
+proxy start
+proxy status
+client status
+server status
+proxy stop
+server stop
+client stop
+```
+
+Any supported client/server transport combination works. Proxying requires zero
+client retries and maps the server unit to the connected client's unit.
+`proxy stop` restores local simulation. Upstream errors pass through; connection
+failure never silently falls back to simulated values. Stopping either endpoint
+while proxying needs confirmation; CLI can supply `--confirm`.
+
+`client status` and `server status` show last observations without issuing new
+requests. Read values, write acknowledgements, and uncertain writes stay
+separate. These views are runtime-only; saved operation records remain available.
+See the [proxy guide](docs/SERVER.md#proxying-and-evidence-views) for full
+routing details.
+
+### Proxy request output
+
+Proxying logs forwarding attempts using the same request ID as the
+[server arrival line](#server-request-output):
+
+```text
+2026-10-06T14:32:05.124+00:00 PROXY  #42 upstream=TCP 192.168.1.20:502 unit=7 read holding_registers 10-12
+```
+
+Proxy logging is independent of server logging. Use `proxy start --quiet` to
+suppress routine forwarding lines, or toggle them while proxying:
+
+```text
+proxy logging off
+proxy logging on
+```
+
+Errors remain visible and recording continues. Each proxy start resets its
+logging setting from `--quiet`; the setting isn't saved.
 
 ## Management result popups
 
-In TUI/WUI, ctmodbus management results use standard scrollable message dialogs
-with descriptive titles. This includes start/stop, list/show/status, import/export,
-discovery, validation, configuration set/save/load, tag create/rename/delete,
-server rule/hook edits, logging switches, reset, and clear. Actions finish before
-the dialog opens. Dismiss it before submitting another command; running servers,
-proxying, polling, and request logging continue. Main output remains intact.
-Existing confirmation dialogs still precede actions requiring approval.
+In the terminal/web UI, management commands show scrollable result popups.
+This includes start/stop, status, discovery, tag management, and config edits.
+The action finishes before the popup opens. Dismiss it to submit the next
+command; servers, proxying, polling, and request logs keep running meanwhile.
+Confirmations appear before actions that need approval.
 
-Read/write results, polling rows, and server/proxy request logs stay in the main
-output pane. Bare component help keeps its standard help popup. Inherited ctui
-commands retain their existing behavior. CLI management results remain plain text.
-
-## Connection options and operation results
-
-All connections accept `--unit` (1–247), `--timeout` (seconds), and `--retries`
-(0–10). Defaults are unit 1, zero retries, and a timeout of 3 seconds for network
-connections or 1 second for serial connections. Serial defaults are 9600 baud,
-8 data bits, no parity, and 1 stop bit; override these with `--baudrate`,
-`--bytesize`, `--parity`, and `--stopbits`. TCP/UDP ports default to 502 and TLS to 802; supply
-host and port separately, including for IPv6 addresses.
-
-`client start tls HOST` uses Modbus TLS framing and verifies the server certificate
-against system trust roots and the supplied hostname. Use `--ca-file PATH` for
-a private CA and `--cert-file PATH --key-file PATH` for client authentication.
-A certificate file may contain its private key; otherwise supply `--key-file`.
-Keys must be unencrypted. Certificate loading runs off the event loop.
-`--insecure` explicitly disables server certificate and hostname verification.
-Profiles save these file paths and the verification setting, not certificate or
-private-key contents; the files must remain available when reconnecting.
-
-Device I/O is asynchronous, with requests serialized on the single connection.
-The status bar shows the project, transport state, and read progress. `client stop` cancels outstanding device work and closes the transport. Reconnect
-before issuing more requests. The tool does not automatically reconnect.
-Ctrl-C clears the input line; use `client stop` to stop running device commands.
-
-Read output includes UTC timestamps and compressed address/value summaries.
-Register output includes integer, hex, and character views; the character view
-is a Unicode code point per register, not a UTF-8 string decoder. Failed chunked
-reads include the completed values in the error output.
+Read/write results, polling rows, and request logs stay in the main output.
+CLI management results are plain text. ctui's built-in commands use their own
+result presentation.
 
 ## Command-line execution
 
-The same commands work without opening the terminal UI:
+Use the same commands without opening a UI:
 
 ```bash
 ctmodbus --help
@@ -317,25 +445,24 @@ ctmodbus -c 'client start tcp 127.0.0.1 --port 5020' \
 ctmodbus -f commands.txt
 ```
 
-Repeat `-c`/`--command` and `-f`/`--file` in the desired order. Command files
-contain one command per line; blank lines and lines starting with `#` are
-ignored. Quote complete commands at the shell. Inline comments in the
-interactive examples above are explanatory and should be omitted when typing.
+Repeat `-c`/`--command` and `-f`/`--file` in the order you want them run.
+Quote each complete command at the shell. Files take one command per line;
+blank lines and lines beginning with `#` are ignored. Commands run sequentially
+and stop at the first error.
 
-Commands execute sequentially in CLI mode and stop at the first error. Exit
-status is 0 for success, 2 for command/argument/protocol errors, and 1 for
-unexpected command failures. After a successful CLI command sequence, the process stays alive if a server
-is still running. Ctrl-C stops it and closes both server and client. Include
-`server stop` to finish a temporary-server sequence and exit normally. An error
-or explicit exit command skips keepalive and shuts everything down. Server starts
-return immediately to allow subsequent commands; `--foreground` is removed.
+A server start returns immediately so later commands can run. After a successful
+sequence, CLI stays alive if a server is still running. Ctrl-C shuts down server
+and client cleanly. Include `server stop` to finish a temporary-server sequence
+normally; errors or an explicit `exit confirm` also shut everything down.
+
+Exit codes are 0 for success, 2 for command/argument/protocol errors, 1 for
+unexpected command failures, and 130 for Ctrl-C.
 
 ## Projects, profiles, and records
 
-ctui stores projects in its platform-specific user data directory under the
-application ID `io.controlthings.ctmodbus`. Each project contains named configs,
-command history, connection recording sessions, and decoded Modbus operation
-records. Live connections are never persisted.
+Projects keep configs, tags, command history, and decoded operation records in
+ctui's user data directory under `io.controlthings.ctmodbus`. Save a client
+profile to reuse connection settings:
 
 ```text
 project
@@ -348,19 +475,21 @@ client config save lab
 client start
 read holding_registers 0-9
 client stop
+project history export commands.txt
 project export lab.ctui-project
-history export commands.txt
 project create another-lab
 project load default
 client config load lab
 ```
 
-`tcp-local` and `udp-local` are built-in localhost profiles. `client config save NAME`
-saves selected settings, even while disconnected; `client config load NAME`
-validates and selects them without connecting. Use `client start` to connect.
-`client config show` displays all selected fields, the source name, and unsaved
-changes. `client config set` changes only supplied options, atomically, while
-the client is stopped. The first selection requires `--transport` and `--target`:
+This example assumes the default project and a device matching the saved
+settings. `tcp-local` and `udp-local` are built-in localhost profiles.
+Loading a config selects it without connecting; use `client start` to connect.
+`client config show` includes the saved source and any unsaved changes.
+Saving replaces the named profile with the selected settings, even while
+disconnected.
+
+To select settings from scratch, supply transport and target first:
 
 ```text
 client config set --transport tcp --target localhost --port 502 --unit 1
@@ -370,120 +499,71 @@ client start
 client status
 client stop
 client config load lab
-client start
 ```
 
-Settings include transport, target, port, unit, timeout, retries, serial
-baudrate/data bits/parity/stop bits, TLS certificate paths, and insecure mode.
-Clear TLS paths with `--clear-ca-file`, `--clear-cert-file`, and
-`--clear-key-file`; use `--insecure false` to restore verification or
-`--insecure true` to disable it. Edits retain omitted values, including when
-changing transport, so clear incompatible TLS fields in the same edit.
-File contents, live sockets, polling tasks, and runtime evidence are never
-saved in client configs. Selection survives client stop and clears on project
-transitions.
-ctui also supplies config JSON import/export and whole-project import/export.
-Close the connection and finish device work before switching or resetting
-projects; this keeps protocol records in the project that initiated them.
+Edit settings while the client is stopped. Only supplied fields change, and
+invalid edits leave the previous selection intact. Fields include network,
+serial, and TLS options. Clear certificate paths with `--clear-ca-file`,
+`--clear-cert-file`, and `--clear-key-file`. Use `--insecure false` to restore
+verification. Changing transports keeps omitted fields, so clear incompatible
+TLS settings in the same edit. Selection survives a client stop and clears
+when changing projects.
 
-Records contain attempted requests, decoded responses, and operation errors,
-linked to a session containing connection settings. They are not raw packet
-captures. Recording errors are reported separately so an acknowledged write is
-not mistaken for a failed write and retried. Command history follows ctui's
-successful-command behavior; protocol errors are retained as operation records.
+Stop client, server, and polling before switching or resetting projects.
+ctui also provides config JSON and whole-project import/export. Live connections,
+tasks, runtime observations, and certificate/hook file contents aren't saved.
+
+Records link attempted requests, decoded responses, and errors to a connection
+session; they aren't packet captures. Recording failures are reported separately
+from device outcomes so an acknowledged write isn't mistaken for a failed one.
+Command history contains successful commands; protocol errors remain in
+operation records.
 
 ## Development and validation
+
+From a repository checkout:
+
+```bash
+uv sync --locked --python 3.11
+uv run ctmodbus
+```
+
+Development and release checks use published `ctui==1.0.0` from the lockfile.
+Run the checks with:
 
 ```bash
 uv run --python 3.11 python -m unittest discover -s tests -v
 uv run black --check src tests
 uv run isort --check-only src tests
 uv run pylint src/ctmodbus
+uv lock --check
+git diff --check
 uv build
 ```
 
-Tests use isolated temporary projects, injected clients, actual local TCP/UDP
-servers, and a terminal runtime with injected input/output. POSIX systems also
-exercise RTU/ASCII over bridged pseudo-terminals; Windows skips those PTY tests.
-For a local manual TCP fixture, run
-`uv run python tests/server.py tcp --port 5020`.
-The same fixture supports `udp`, `rtu`, and `ascii`; serial fixtures take
-`--target DEVICE`. TLS integration tests use temporary certificates generated with `openssl` and
-are skipped if that executable is unavailable. Physical serial adapters still
-need hardware smoke testing.
+Tests use temporary projects, local TCP/UDP/TLS servers, and terminal/web
+runtimes. POSIX PTYs cover RTU/ASCII framing; Windows skips those tests.
+TLS tests need OpenSSL and skip if it isn't available. Physical serial adapters
+still need hardware checks.
 
-This is a breaking migration from 0.x. Legacy command spellings, space-separated
-multi-write values, host:port syntax, and old storage formats are not supported.
-Polling, device cloning, MITM rules, raw/fuzzy requests,
-tunneling, and historian integration remain deferred.
+For a manual TCP fixture, run:
 
-See [MIGRATION.md](MIGRATION.md) for the 0.x transition and
-[CHANGELOG.md](CHANGELOG.md) for release-facing changes. Current work and
-validation gaps are in [docs/STATUS.md](docs/STATUS.md), architecture and rationale
-in [docs/DECISIONS.md](docs/DECISIONS.md), and publication procedures in
-[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Local implementation contracts live
-in module, class, and callable docstrings.
+```bash
+uv run python tests/server.py tcp --port 5020
+```
+
+It also supports `udp`, `rtu`, and `ascii`; serial fixtures take
+`--target DEVICE`. Use the [release checklist](RELEASE_CHECKLIST.md) for the
+platform matrix, isolated wheel/sdist checks, and publishing procedure.
+
+Moving from 0.x? See [MIGRATION.md](MIGRATION.md) for the command and storage
+changes. [CHANGELOG.md](CHANGELOG.md) covers user-facing changes;
+[project status](docs/STATUS.md) tracks current work and validation gaps, and
+[decisions](docs/DECISIONS.md) explains architecture and accepted choices.
+Device cloning, MITM rules, raw/fuzzy requests, tunneling, and historian
+integration remain deferred.
 
 ## License
 
 Copyright Justin Searle. Licensed under the GNU General Public License,
 version 3 or later. See [LICENSE](LICENSE).
-## Serving and proxying
-
-ctmodbus can serve TCP, UDP, TLS, RTU and ASCII while maintaining an independent
-client connection. Configure sparse raw ranges or typed tags with static,
-random and sequence behavior, plus optional Python hooks. Server definitions
-can be assembled in CTUI or imported/exported as TOML.
-
-```text
-server config import examples/device.toml
-server start tcp 127.0.0.1 --port 5020
-server status
-server stop
-client start tcp 127.0.0.1 --port 502
-client status
-```
-
-`proxy start` routes incoming server requests through the connected client;
-`proxy stop` restores local behavior. See [server and proxy usage](docs/SERVER.md)
-for all commands, CLI server keepalive, hooks, defaults and evidence semantics.
-
-### Server and proxy request output
-
-Server listeners append one line per decoded incoming request by default.
-Enabling the proxy adds a forwarding line with the same application-local request
-ID. Lines include UTC millisecond timestamps, source, peer or upstream endpoint,
-unit, function/table, and address range. Writes show compact bits or four-digit
-hex registers, capped at 16 displayed values with an omitted-value count; server
-operation records retain the full write payload. Arrival/forwarding lines do not
-imply a successful response or write acknowledgement.
-
-```text
-server start tcp 127.0.0.1 --port 5020 --quiet
-proxy start --quiet
-server logging on
-proxy logging on
-server logging off
-proxy logging off
-server status
-proxy status
-```
-
-`--quiet` is available on every `server start` transport and on `proxy start`. Server
-arrival and proxy forwarding logging are independent. Live `logging on/off`
-commands change routine verbosity without stopping the listener or disabling
-records. Starting a listener or enabling the proxy resets its logging policy
-from that command's `--quiet` option; settings are runtime-only.
-
-```text
-2026-10-06T14:32:05.123+00:00 SERVER #42 peer=('127.0.0.1', 53120) unit=1 read holding_registers 10-12
-2026-10-06T14:32:05.124+00:00 PROXY  #42 upstream=TCP 192.168.1.20:502 unit=7 read holding_registers 10-12
-```
-
-Request failures remain visible in quiet mode. Failed proxy writes distinguish
-potentially unconfirmed outcomes; upstream exceptions are shown without implying
-forwarding success. Display escapes control characters. Polling and server logs
-share one synchronous append path for terminal, browser, and CLI output. CLI
-listeners remain running automatically after a successful command sequence. Malformed/unsupported
-requests that the decoder reports also produce diagnostic lines. Future MITM
-logging is not implemented.
