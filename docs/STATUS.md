@@ -1,22 +1,23 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `5b3720f`, with uncommitted CI
-regression-test fixes. Stable metadata, release documentation and changelog are
-committed and pushed; the corrected tests pass locally on Python 3.11 and 3.14.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `85f59b4`, with an uncommitted
+Windows TLS-fixture fix. Prior path/cadence fixes pass remote Linux/macOS jobs;
+the remaining TLS adjustment passes local checks below.
 
 ## Current state
 
-- The [release-preparation CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40071325659)
-  at `5b3720f` failed 14 of 16 platform/Python test jobs. The recurring causes
-  are a polling test's strict real-time upper bound, unquoted Windows paths in
-  tag/server test commands, and a macOS hook-path assertion comparing resolved
-  and symlinked paths. Quality checks passed; artifact jobs were skipped because
-  tests failed. The preceding stable-ctui run showed the same failure patterns.
-- Test fixes quote file paths with the framework's shell-like syntax, use
-  temporary directories containing spaces, and compare the canonical hook path.
-  Polling now has separate gated-I/O/lock checks and a virtual-clock cadence
-  regression instead of an exact real-time deadline. No runtime code or workflow
-  skips changed. Local results below pass; remote verification awaits submission.
+- The [latest CI run](https://github.com/ControlThings-io/ctmodbus/actions/runs/40074055336)
+  at `85f59b4` passes all 12 Linux/macOS platform/Python jobs and quality checks.
+  All four Windows jobs now fail only the first connection in
+  `test_native_tls_and_client_certificate_requirement`; prior path, symlink and
+  polling fixes pass. Artifact jobs remain skipped because Windows tests fail.
+- The TLS fixture connected to `localhost` with a 0.5-second timeout while the
+  listener bound IPv4. Logs show a timeout-compatible empty connection error;
+  resolver/address-family latency is suspected, not proven on Windows. A local
+  controlled resolver delay reproduces the same failure. The fixture now uses
+  IPv4 directly, a matching certificate IP SAN and the normal three-second
+  timeout, with certificate verification enabled. Runtime code and workflow
+  skips are unchanged; Windows verification awaits submission.
 
 - CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
   Added/Changed/Fixed/Compatibility sections checked against current usage and
@@ -25,7 +26,7 @@ committed and pushed; the corrected tests pass locally on Python 3.11 and 3.14.
   release checks remain outstanding. Neither the metadata nor dated changelog
   establishes publication.
 - Release preparation must go through a reviewed PR from `dev-v1.0.0` into
-  `main`. Commit/push the CI test fixes when authorized, open the PR with
+  `main`. Commit/push the remaining TLS test fix when authorized, open the PR with
   validation evidence, then verify the final `main` revision before approving
   and pushing `v1.0.0`. The checklist records this sequence; no PR or merge has
   been performed during local release preparation.
@@ -149,7 +150,7 @@ committed and pushed; the corrected tests pass locally on Python 3.11 and 3.14.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Commit/push the CI test fixes when authorized and open a PR from
+3. Commit/push the TLS test fix when authorized and open a PR from
    `dev-v1.0.0` into `main`. Require the full platform/Python matrix, review and
    merge the PR, then run the [release checklist](../RELEASE_CHECKLIST.md) on
    the intended `main` release revision. Local branch results below do not
@@ -163,6 +164,17 @@ historian integration remain deferred. Release readiness requires a green
 remote matrix on the corrected revision, final-main validation and manual checks.
 
 ## Validation evidence
+
+- October 24 Windows TLS follow-up on `85f59b4` plus test changes: reviewed
+  run 40074055336, confirming 12 passing Linux/macOS jobs and the same single
+  TLS connection failure on all four Windows Python versions. Injecting 0.75s
+  localhost-resolution latency reproduces the old 0.5s fixture failure; the
+  revised IPv4 fixture passes under the same injection. No exact Windows
+  resolver/handshake root cause is established without a Windows run.
+- All 131 tests pass with no skips on Linux/Python 3.11.16; all 21 server tests
+  pass with no skips on Python 3.14.9. Black/isort, local documentation links
+  and whitespace checks pass. No runtime/dependency changes, Windows execution,
+  remote rerun of the new fix, artifact rebuild, commit or push were performed.
 
 - October 24 CI investigation on `5b3720f` plus test changes: inspected failing
   jobs and logs from runs 40071325659 and 40067319242. Each reported failure maps

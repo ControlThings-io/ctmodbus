@@ -500,6 +500,11 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipUnless(shutil.which("openssl"), "TLS certificates require OpenSSL")
     async def test_native_tls_and_client_certificate_requirement(self):
+        """Verify TLS/mTLS on IPv4 with matching SANs and the normal 3s budget.
+
+        Avoid localhost address-family fallback and a subsecond TLS deadline on
+        Windows runners; certificate and hostname verification remain enabled.
+        """
         cert, key = (
             Path(self.folder.name) / "server.pem",
             Path(self.folder.name) / "server.key",
@@ -521,7 +526,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
                 "-subj",
                 "/CN=localhost",
                 "-addext",
-                "subjectAltName=DNS:localhost",
+                "subjectAltName=DNS:localhost,IP:127.0.0.1",
             ],
             check=True,
             capture_output=True,
@@ -532,7 +537,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         context = ssl.create_default_context(cafile=str(cert))
         client = AsyncModbusTlsClient(
-            "localhost", port=port, sslctx=context, timeout=0.5, retries=0
+            "127.0.0.1", port=port, sslctx=context, timeout=3, retries=0
         )
         self.clients.append(client)
         self.assertTrue(await client.connect())
@@ -547,7 +552,7 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         context.load_cert_chain(str(cert), str(key))
         client = AsyncModbusTlsClient(
-            "localhost", port=port, sslctx=context, timeout=0.5, retries=0
+            "127.0.0.1", port=port, sslctx=context, timeout=3, retries=0
         )
         self.clients.append(client)
         self.assertTrue(await client.connect())
