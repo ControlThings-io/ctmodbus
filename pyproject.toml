@@ -1,6 +1,6 @@
 [project]
 name = "ctmodbus"
-version = "1.0.0rc1"
+version = "1.0.0"
 description = "A highly flexible Modbus tool made for penetration testers"
 authors = [{ name = "Justin Searle", email = "justin@controlthings.io" }]
 requires-python = ">=3.11,<4"

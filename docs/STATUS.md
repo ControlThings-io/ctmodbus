@@ -1,16 +1,22 @@
 # Project status
 
-Last reconciled: 2026-10-24, `dev-v1.0.0` at `68d7aa3`, with an uncommitted
-1.0.0 changelog update dated October 24. The README and server-guide
-consolidation are committed; validation for the changelog is recorded below.
+Last reconciled: 2026-10-24, `dev-v1.0.0` at `08de58b`, with uncommitted stable
+1.0.0 package/lockfile and release-checklist changes. The dated changelog and
+README are committed; local stable-version release checks below pass.
 
 ## Current state
 
 - CHANGELOG now targets 1.0.0, dated 2026-10-24 at the owner's request, with
   Added/Changed/Fixed/Compatibility sections checked against current usage and
-  implementation. Package metadata and the release checklist still target RC1;
-  updating them and running final release gates remain next steps. The dated
-  changelog does not establish publication.
+  implementation. Package metadata, lockfile and release checklist now target
+  stable 1.0.0. Local checks and artifact smoke tests pass; PR/main CI and manual
+  release checks remain outstanding. Neither the metadata nor dated changelog
+  establishes publication.
+- Release preparation must go through a reviewed PR from `dev-v1.0.0` into
+  `main`. Commit/push the remaining changes when authorized, open the PR with
+  validation evidence, then verify the final `main` revision before approving
+  and pushing `v1.0.0`. The checklist records this sequence; no PR or merge has
+  been performed during local release preparation.
 
 - README uses the owner's approved informal, concise technical style throughout.
   The feature list distinguishes flexible reads from consecutive writes and
@@ -33,7 +39,7 @@ consolidation are committed; validation for the changelog is recorded below.
 - Async migration, TLS, project-scoped typed tags (`5eb04ee`), and USB identity
   in serial completion (`4718ddd`) are implemented. Architecture and accepted
   choices are in [DECISIONS.md](DECISIONS.md).
-- Version remains `1.0.0rc1`; dependencies are `ctui==1.0.0` and
+- Version is `1.0.0`; dependencies are `ctui==1.0.0` and
   `pymodbus[serial]>=3.15.0,<3.16` (locked to 3.15.0), Python >=3.11,<4.
 - Development and release validation now use the locked PyPI ctui distribution.
   The temporary adjacent-checkout override has ended. `uv sync --locked`
@@ -135,12 +141,11 @@ consolidation are committed; validation for the changelog is recorded below.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Update ctmodbus stable version metadata, lockfile and release checklist;
-   the 1.0.0 changelog is dated October 24 and the ctui dependency already uses
-   published stable 1.0.0. Run the
-   [release checklist](../RELEASE_CHECKLIST.md) on the intended release revision,
-   including the full remote platform matrix, artifacts, terminal/browser
-   checks, and physical RTU/ASCII devices. Record actual evidence here.
+3. Commit/push release preparation when authorized and open a PR from
+   `dev-v1.0.0` into `main`. Require the full platform/Python matrix, review and
+   merge the PR, then run the [release checklist](../RELEASE_CHECKLIST.md) on
+   the intended `main` release revision. Local branch results below do not
+   establish final-main or remote validation. Record actual evidence here.
    Remove README's temporary checkout-installation note once 1.0 is published.
 4. Confirm the PyPI trusted publisher configuration and obtain release approval
    before publication (D08).
@@ -150,6 +155,21 @@ historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 24 stable metadata preparation on `08de58b` plus the working tree,
+  Python 3.11.16/Linux x86-64 with published ctui 1.0.0: all 130 tests passed
+  with no skips. Black/isort, pylint (10.00/10), locked sync, lockfile and
+  whitespace checks passed. CLI help, installed app metadata, project metadata
+  and the lockfile all report ctmodbus 1.0.0. No dependency versions changed.
+- Fresh 1.0.0 wheel/sdist builds and both isolated installed-artifact smoke tests
+  passed without the editable ctui override. Inspected stable version, README,
+  GPL license and dependency metadata in both artifacts; imported ctui is the
+  published 1.0.0 distribution in site-packages. uv 0.13.5 emitted the existing
+  build-backend version warning; builds and smoke checks succeeded with the
+  declared uv_build range. Local documentation links/anchors and release
+  metadata were checked. No remote matrix CI, physical-adapter or sustained
+  manual UI checks were run; no commit, push, PR, merge, tag or publication was
+  performed by this work. Repeat release gates on the final `main` revision.
 
 - October 24 changelog preparation on `68d7aa3` plus documentation changes:
   reconciled the release notes with README, migration guidance and implemented

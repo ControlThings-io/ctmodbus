@@ -153,6 +153,8 @@ Accepted update, 2026-10-24: prepare stable ctmodbus 1.0.0 as the next release,
 superseding the earlier RC-first target. The changelog is dated October 24 at
 the owner's request. Stable ctui adoption is recorded in D06; package metadata,
 release gates and publication approval remain separate release steps.
+Merge release preparation from `dev-v1.0.0` into `main` through a reviewed PR,
+then tag the validated `main` release revision after publication approval.
 
 ## D09 — Migration commit history
 
