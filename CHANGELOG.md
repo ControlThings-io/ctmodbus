@@ -2,6 +2,9 @@
 
 ## [1.0.0rc1] - Unreleased
 
+- Require published stable `ctui==1.0.0`; end the temporary adjacent-checkout
+  development override.
+
 - Accept mixed decimal and `0x`/`0b`/`0o`/`0d` literals in address-based
   holding-register write lists, including signed 16-bit values encoded as
   two's complement. Preserve unsigned 0–65535 values and single-request limits.

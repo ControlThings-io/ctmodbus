@@ -104,6 +104,12 @@ constrain PyModbus to the tested 3.15 minor series, locking 3.15.0. The recorded
 rationale for the minor bound is PyModbus API changes between minor releases.
 Do not expand it without compatibility validation.
 
+Accepted update, 2026-10-23: pin published stable `ctui==1.0.0` and end the
+temporary adjacent-checkout override. Local development had already exercised
+the ctui checkout leading to this release; validate the published distribution
+and its resolved dependencies before claiming release readiness. This
+supersedes the migration ctui pin; ctmodbus's own version remains unchanged.
+
 Use pyproject.toml as package/version metadata, uv_build, and uv.lock; remove
 obsolete setup.py and VERSION duplication. Align metadata with the existing
 GPL-3.0-or-later source/license; this was not a new relicensing decision.

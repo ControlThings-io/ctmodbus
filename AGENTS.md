@@ -11,11 +11,9 @@ Use uv and the checked-in lockfile. Python 3.11 is the baseline; CI covers
 Python 3.11–3.14 on Linux x86-64/ARM64, Windows, and macOS.
 The 0.x compatibility waiver applies only to the migration (D01).
 
-Until preparing the `1.0.0rc1` release, run ctmodbus and its tests with the
-adjacent ctui checkout by adding `--with-editable ../ctui` to `uv run`. This is
-a temporary development override: do not change the declared ctui dependency
-or lockfile merely to use the checkout. Release validation must omit the
-override and use the intended published PyPI version.
+Run ctmodbus and its tests with the locked, published `ctui==1.0.0` dependency.
+The temporary adjacent-checkout override has ended; release validation must
+omit `--with-editable ../ctui`.
 
 ## Project constraints
 
@@ -43,11 +41,11 @@ names and configuration fields remain framework-owned.
 
 ```bash
 uv sync --locked --python 3.11
-uv run --with-editable ../ctui ctmodbus
-uv run --python 3.11 --with-editable ../ctui python -m unittest discover -s tests -v
-uv run --with-editable ../ctui black --check src tests
-uv run --with-editable ../ctui isort --check-only src tests
-uv run --with-editable ../ctui pylint src/ctmodbus
+uv run ctmodbus
+uv run --python 3.11 python -m unittest discover -s tests -v
+uv run black --check src tests
+uv run isort --check-only src tests
+uv run pylint src/ctmodbus
 uv lock --check
 git diff --check
 uv build

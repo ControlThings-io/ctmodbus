@@ -1,8 +1,8 @@
 # Project status
 
-Last reconciled: 2026-10-23, `dev-v1.0.0` at `5db3c8e`, with local radix and
-signed 16-bit address-based register writes. These changes remain uncommitted;
-the prior bulk tag deletion work is committed at `5db3c8e`.
+Last reconciled: 2026-10-23, `dev-v1.0.0` at `9c15d08`, with an uncommitted
+update to published stable `ctui==1.0.0`. Radix and signed register writes are
+committed at `9c15d08`; local published-dependency checks below pass.
 
 ## Current state
 
@@ -16,18 +16,20 @@ the prior bulk tag deletion work is committed at `5db3c8e`.
 - Async migration, TLS, project-scoped typed tags (`5eb04ee`), and USB identity
   in serial completion (`4718ddd`) are implemented. Architecture and accepted
   choices are in [DECISIONS.md](DECISIONS.md).
-- Version remains `1.0.0rc1`; dependencies are `ctui==1.0.0rc1` and
+- Version remains `1.0.0rc1`; dependencies are `ctui==1.0.0` and
   `pymodbus[serial]>=3.15.0,<3.16` (locked to 3.15.0), Python >=3.11,<4.
-- During development, local commands and tests use the adjacent `../ctui`
-  checkout through `uv run --with-editable ../ctui`. This temporary override
-  leaves dependency metadata unchanged. Release validation must use the chosen
-  published PyPI ctui version without the override.
-- IDEs using `.venv/bin/python` need the adjacent checkout installed directly
-  with `uv pip install --python .venv/bin/python --editable ../ctui` after
-  `uv sync`. The run-time override alone uses a separate environment. See the
-  [development setup](../README.md#installation).
-- The owner reported RC1 unpublished on September 18. Remote refs, CI, and
-  publication state have not been refreshed; CHANGELOG remains Unreleased.
+- Development and release validation now use the locked PyPI ctui distribution.
+  The temporary adjacent-checkout override has ended. `uv sync --locked`
+  replaces prior editable ctui installations in `.venv`; direct imports now
+  resolve to ctui 1.0.0 in site-packages. See the
+  [development setup](../README.md#installation) and D06.
+- October 23 release review confirmed ctui 1.0.0 on PyPI; ctmodbus remains
+  unpublished at 1.0 and CHANGELOG remains Unreleased. Existing
+  [CI at 9c15d08](https://github.com/ControlThings-io/ctmodbus/actions/runs/40051287256)
+  failed because the old ctui RC1 dependency lacks newer imports. The updated
+  dependency passes local tests/lint; remote CI has not run on this change.
+  The GitHub `pypi` environment exists; PyPI trusted publisher configuration
+  still needs verification.
 - The September 21 audit updates global documentation ownership rules, expands
   contracts throughout all 16 project Python files, and reconciles all seven
   Markdown files. Global instructions need separate synchronization per machine.
@@ -36,7 +38,7 @@ the prior bulk tag deletion work is committed at `5db3c8e`.
 - Tag TOML commands are grouped with the other tag-management commands as
   `tags export` and `tags import`; the unreleased `export tags` and `import tags`
   spellings are not retained as aliases. Both path arguments use the shared
-  ctui path completer from the adjacent development checkout.
+  ctui path completer from the published stable dependency.
   The management group is now `tags` (create/list/show/rename/delete/export/
   import); dispatch guards, tests, and examples use that spelling. `write tag`
   and server tag I/O retain their existing syntax. See D11 for the naming decision.
@@ -115,20 +117,33 @@ the prior bulk tag deletion work is committed at `5db3c8e`.
    Manually exercise sustained polling in a real terminal/browser and against
    physical devices. Automated TUI/WUI and cadence checks pass; backend test
    stalls were resolved by running outside the sandbox (see October 6 evidence).
-3. Before `1.0.0rc1` release validation, select the published PyPI ctui version,
-   update the dependency and lockfile if needed, and stop using the local
-   editable override. Then run the [release checklist](../RELEASE_CHECKLIST.md)
-   on the intended release revision, including the full platform matrix,
-   artifacts, terminal checks, and physical RTU/ASCII devices. Record actual
-   evidence here.
-4. Obtain release approval before publication. Before stable 1.0, adopt tested
-   stable ctui and repeat release gates (D08).
+3. Prepare ctmodbus stable version metadata, changelog and release documentation;
+   the ctui dependency and lockfile now use published stable 1.0.0. Run the
+   [release checklist](../RELEASE_CHECKLIST.md) on the intended release revision,
+   including the full remote platform matrix, artifacts, terminal/browser
+   checks, and physical RTU/ASCII devices. Record actual evidence here.
+4. Confirm the PyPI trusted publisher configuration and obtain release approval
+   before publication (D08).
 
 Device cloning, MITM rules, raw/fuzzy requests, tunneling, and
 historian integration remain deferred. No implementation blocker is established;
 release readiness lacks final-revision and manual/remote validation.
 
 ## Validation evidence
+
+- October 23 published ctui adoption on `9c15d08` plus the working tree,
+  Python 3.11.16/Linux x86-64: all 130 tests passed with no skips, including
+  actual TCP/UDP/TLS/mTLS/PTY transports, terminal/browser runtime, polling,
+  management dialogs, tags and lifecycle checks. No editable ctui override was
+  used; imported ctui reports 1.0.0 from site-packages with no direct URL.
+- Locked sync, Black/isort checks, pylint (10.00/10), lockfile and whitespace
+  checks passed. Wheel/sdist builds and both isolated installed-artifact smoke
+  tests passed using published dependencies; metadata in each artifact requires
+  `ctui==1.0.0`. uv 0.13.5 regenerated lock schema revision 5 and added ctui's
+  required browser dependencies; existing locked package versions other than
+  ctui are unchanged. uv emitted a build-backend version warning; both builds
+  succeeded with the existing declared uv_build range. No remote CI rerun,
+  physical-device checks, sustained manual UI checks or publication was done.
 
 - October 23 radix register writes on `5db3c8e` plus the working tree,
   Python 3.11.16 with adjacent ctui at `755f5ac`: all 130 tests passed with no

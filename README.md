@@ -21,17 +21,14 @@ uv tool install .
 For development:
 
 ```bash
-uv sync --locked
-uv pip install --python .venv/bin/python --editable ../ctui
-uv run --with-editable ../ctui ctmodbus
+uv sync --locked --python 3.11
+uv run ctmodbus
 ```
 
-Until release preparation, use the adjacent `../ctui` development checkout.
-The editable install makes it available to IDEs using `.venv/bin/python`;
-repeat that install after `uv sync`, which can restore the locked package.
-Keep `--with-editable ../ctui` on development `uv run` commands. This temporary
-setup leaves the declared dependency and lockfile unchanged; release validation
-must use the intended published ctui version without the override.
+Development and release validation use the published `ctui==1.0.0` dependency.
+The temporary adjacent-checkout override has ended. Run `uv sync --locked` to
+replace an older editable ctui install; IDEs using `.venv/bin/python` will then
+use the locked package too.
 
 After a release candidate has been published, install it with
 `uv tool install 'ctmodbus==1.0.0rc1'` or
@@ -398,10 +395,10 @@ successful-command behavior; protocol errors are retained as operation records.
 ## Development and validation
 
 ```bash
-uv run --with-editable ../ctui python -m unittest discover -s tests -v
-uv run --with-editable ../ctui black --check src tests
-uv run --with-editable ../ctui isort --check-only src tests
-uv run --with-editable ../ctui pylint src/ctmodbus
+uv run --python 3.11 python -m unittest discover -s tests -v
+uv run black --check src tests
+uv run isort --check-only src tests
+uv run pylint src/ctmodbus
 uv build
 ```
 
@@ -409,7 +406,7 @@ Tests use isolated temporary projects, injected clients, actual local TCP/UDP
 servers, and a terminal runtime with injected input/output. POSIX systems also
 exercise RTU/ASCII over bridged pseudo-terminals; Windows skips those PTY tests.
 For a local manual TCP fixture, run
-`uv run --with-editable ../ctui python tests/server.py tcp --port 5020`.
+`uv run python tests/server.py tcp --port 5020`.
 The same fixture supports `udp`, `rtu`, and `ascii`; serial fixtures take
 `--target DEVICE`. TLS integration tests use temporary certificates generated with `openssl` and
 are skipped if that executable is unavailable. Physical serial adapters still
